@@ -1,6 +1,6 @@
 
 from opti import matrice_distance
-
+from donnees import lire_scenario
 
 def space_subdiv(li_clients, P_max_camion, li_poids):
     zones = []

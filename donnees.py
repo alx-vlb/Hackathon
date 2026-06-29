@@ -210,4 +210,3 @@ def generer_adresse_aléatoire():
     geolocator = Nominatim(user_agent="projet_livraison")
     location = geolocator.geocode(adresse)
     print((location.latitude,location.longitude))'''
-
