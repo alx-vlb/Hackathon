@@ -62,7 +62,7 @@ Rectangle {{
 
     Plugin {{
         id: mapPlugin
-        name: "osm" // Utilise le moteur OpenStreetMap natif de Qt
+        name: "osm"
     }}
 
     Map {{
@@ -72,14 +72,45 @@ Rectangle {{
         center: QtPositioning.coordinate({DEPOT['lat']}, {DEPOT['lon']})
         zoomLevel: 13
 
-        // Tracé de la route
+        // --- AJOUT : Gestion des interactions de la souris et du trackpad ---
+        
+        // 1) Déplacement (Pan) en glissant la souris/le doigt
+        DragHandler {{
+            id: dragHandler
+            target: null
+            onTranslationChanged: (delta) => {{
+                mainMap.pan(-delta.x, -delta.y)
+            }}
+        }}
+
+        // 2) Zoom avec la molette de la souris ou le défilement trackpad
+        WheelHandler {{
+            id: wheelHandler
+            onWheel: (event) => {{
+                if (event.angleDelta.y > 0) {{
+                    mainMap.zoomLevel = Math.min(mainMap.maximumZoomLevel, mainMap.zoomLevel + 0.5)
+                }} else {{
+                    mainMap.zoomLevel = Math.max(mainMap.minimumZoomLevel, mainMap.zoomLevel - 0.5)
+                }}
+            }}
+        }}
+
+        // 3) Zoom par pincement de doigts (Pinch-to-zoom sur Mac)
+        PinchHandler {{
+            id: pinchHandler
+            target: null
+            onScaleChanged: (delta) => {{
+                mainMap.zoomLevel += Math.log2(delta)
+            }}
+        }}
+
+        // --- Reste du code (Route et Marqueurs) ---
         MapPolyline {{
             id: routeLine
             line.color: "{BLUE}"
             line.width: 4
         }}
 
-        // Affichage dynamique des marqueurs (Reçoit la liste Python)
         MapItemView {{
             model: stopsModel
             delegate: MapQuickItem {{
@@ -101,7 +132,6 @@ Rectangle {{
         }}
     }}
 
-    // Fonctions appelables directement depuis Python
     function setRoutePath(pathPoints) {{
         var path = [];
         for (var i = 0; i < pathPoints.length; i++) {{
