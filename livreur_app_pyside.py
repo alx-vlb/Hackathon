@@ -12,9 +12,7 @@ from PySide6.QtWidgets import (
 # On remplace le moteur Web par le moteur graphique Quick de Qt
 from PySide6.QtQuickWidgets import QQuickWidget 
 
-# ===========================================================================
 # 1) Données de la tournée
-# ===========================================================================
 
 ORDERS_DB = {
     "6A14837201FR": {"adresse": "12 Rue de Rivoli, 75004 Paris", "lat": 48.8556, "lon": 2.3611, "date_commande": "24/06/2026", "date_limite": "30/06/2026", "volume": 3},
@@ -47,9 +45,7 @@ LINE = "#e3e7ee"
 BG = "#f5f7fa"
 PANEL_BG = "#ffffff"
 
-# ===========================================================================
-# 2) Code de la carte en QML (Le "HTML" version Qt Graphique)
-# ===========================================================================
+# 2) Code de la carte en QML 
 
 QML_MAP_CODE = f"""import QtQuick
 import QtLocation
@@ -72,9 +68,7 @@ Rectangle {{
         center: QtPositioning.coordinate({DEPOT['lat']}, {DEPOT['lon']})
         zoomLevel: 13
 
-        // --- AJOUT : Gestion des interactions de la souris et du trackpad ---
-        
-        // 1) Déplacement (Pan) en glissant la souris/le doigt
+        // 1) Déplacement (Pan)
         DragHandler {{
             id: dragHandler
             target: null
@@ -83,19 +77,19 @@ Rectangle {{
             }}
         }}
 
-        // 2) Zoom avec la molette de la souris ou le défilement trackpad
-        WheelHandler {{
-            id: wheelHandler
-            onWheel: (event) => {{
-                if (event.angleDelta.y > 0) {{
-                    mainMap.zoomLevel = Math.min(mainMap.maximumZoomLevel, mainMap.zoomLevel + 0.5)
-                }} else {{
-                    mainMap.zoomLevel = Math.max(mainMap.minimumZoomLevel, mainMap.zoomLevel - 0.5)
-                }}
+        // 2) Zone de capture de la molette avec sensibilité Mac
+        MouseArea {{
+            anchors.fill: parent
+            acceptedButtons: Qt.NoButton
+            onWheel: (wheel) => {{
+                var sensibilite = 360; 
+                var zoomPas = wheel.angleDelta.y / sensibilite;
+                var nouveauZoom = mainMap.zoomLevel + zoomPas;
+                mainMap.zoomLevel = Math.max(mainMap.minimumZoomLevel, Math.min(mainMap.maximumZoomLevel, nouveauZoom));
             }}
         }}
 
-        // 3) Zoom par pincement de doigts (Pinch-to-zoom sur Mac)
+        // 3) Zoom par pincement (Trackpad)
         PinchHandler {{
             id: pinchHandler
             target: null
@@ -164,9 +158,7 @@ def fetch_road_route(coords):
         print(f"[Avertissement] OSRM indisponible. Ligne droite de secours.")
         return [{"lat": lat, "lon": lon} for lat, lon in coords]
 
-# ===========================================================================
 # 4) Composants d'interface
-# ===========================================================================
 
 class CollapsiblePanel(QWidget):
     def __init__(self, title, start_open=True, parent=None):
@@ -201,9 +193,7 @@ class CollapsiblePanel(QWidget):
         self.content.setVisible(opened)
         self.toggle_btn.setArrowType(Qt.DownArrow if opened else Qt.RightArrow)
 
-# ===========================================================================
 # 5) Fenêtre principale
-# ===========================================================================
 
 class LivreurApp(QMainWindow):
     def __init__(self):
@@ -352,6 +342,9 @@ class LivreurApp(QMainWindow):
         # --- INSTANCIATION DU COMPOSANT NATIF ---
         self.quick_map = QQuickWidget()
         self.quick_map.setResizeMode(QQuickWidget.SizeRootObjectToView)
+
+        self.quick_map.setFocusPolicy(Qt.StrongFocus)
+
         layout.addWidget(self.quick_map)
         return frame
 

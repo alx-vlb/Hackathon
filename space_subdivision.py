@@ -3,9 +3,9 @@ from opti import matrice_distance
 from donnees import lire_scenario
 
 def space_subdiv(li_clients, P_max_camion, li_poids):
-    zones = []
+    zones = [] 
     for i in range(len(li_clients)):
-        zones.append([li_clients[i],1,li_poids[i]],[li_clients[i]])
+        zones.append([li_clients[i],1,li_poids[i],li_clients[i]]) 
     fusion_possible=True
 
     while fusion_possible:
@@ -32,7 +32,8 @@ def space_subdiv(li_clients, P_max_camion, li_poids):
                 i+=1
         if fusion_found==False:
             fusion_possible=False
-                
+
+    return zones    #zones est une liste de zones, chaque zone est une liste contenant le centroïde, le nombre de clients, le poids total et la liste des clients
 
             
 
