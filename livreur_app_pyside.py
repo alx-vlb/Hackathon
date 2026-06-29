@@ -1,24 +1,3 @@
-"""
-Application livreur - version PySide6
-----------------------------------------
-Interface bureau native (PySide6) avec une carte OpenStreetMap intégrée
-(via QWebEngineView + Leaflet) qui affiche un VRAI tracé routier (et non
-plus une ligne droite entre les points), calculé via l'API de routage
-OSRM (https://router.project-osrm.org, service public, sans clé).
-
-Important : l'ordre de passage (OPTIMIZED_ROUTE) et les indicateurs de
-tournée (ROUTE_INFO : temps, nb stops, volume) restent ceux fournis par
-votre moteur d'optimisation - on ne les recalcule pas. OSRM est utilisé
-uniquement pour obtenir la géométrie du trajet le long des routes, pour
-un affichage fidèle sur la carte.
-
-Dépendances :
-    pip install PySide6 PySide6-Addons requests
-
-Lancement :
-    python livreur_app_pyside.py
-"""
-
 import sys
 import json
 
@@ -28,12 +7,13 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QFrame, QToolButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QGridLayout, QSizePolicy, QAbstractItemView, QScrollArea,
+    QSplitter  # <-- Ajouté pour le redimensionnement fluide
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
 
 # ===========================================================================
-# 1) "Base de données" des commandes (à remplacer par une vraie requête SQL)
+# 1) "Base de données" des commandes
 # ===========================================================================
 
 ORDERS_DB = {
@@ -90,7 +70,6 @@ ORDERS_DB = {
 
 DEPOT = {"nom": "Dépôt - Bercy", "lat": 48.8389, "lon": 2.3833}
 
-# Ordre de tournée déjà optimisé en temps (sortie de votre moteur d'optimisation)
 OPTIMIZED_ROUTE = [
     "6A14837201FR",
     "6A14837203FR",
@@ -109,12 +88,6 @@ ROUTE_INFO = {
     "heure_depart": "08:30",
 }
 
-
-# ===========================================================================
-# 2) Couleurs (mêmes tokens que les versions précédentes, pour rester cohérent
-#    avec la maquette de référence)
-# ===========================================================================
-
 BLUE = "#2563eb"
 BLUE_DARK = "#1d4ed8"
 BLUE_PALE = "#eaf1fd"
@@ -130,18 +103,6 @@ PANEL_BG = "#ffffff"
 # ===========================================================================
 
 def fetch_road_route(coords):
-    """
-    coords : liste de (lat, lon) dans l'ordre de passage (dépôt en premier).
-
-    Interroge le service public OSRM pour obtenir la géométrie du trajet
-    qui suit réellement les routes entre tous les points, dans l'ordre
-    donné (on ne ré-optimise rien, OSRM ne fait que "relier les points
-    par la route" segment par segment, dans l'ordre fourni).
-
-    Renvoie une liste de (lat, lon) à tracer sur la carte. En cas
-    d'échec (pas d'internet, service indisponible...), retombe sur les
-    points d'origine (ligne droite) pour que l'application reste utilisable.
-    """
     coord_str = ";".join(f"{lon},{lat}" for lat, lon in coords)
     url = f"https://router.project-osrm.org/route/v1/driving/{coord_str}"
     params = {"overview": "full", "geometries": "geojson"}
@@ -150,16 +111,15 @@ def fetch_road_route(coords):
         resp = requests.get(url, params=params, timeout=8)
         resp.raise_for_status()
         payload = resp.json()
-        geometry = payload["routes"][0]["geometry"]["coordinates"]  # [lon, lat]
+        geometry = payload["routes"][0]["geometry"]["coordinates"]
         return [(lat, lon) for lon, lat in geometry]
-    except Exception as exc:  # pas d'internet, service down, etc.
-        print(f"[avertissement] Tracé routier indisponible ({exc}). "
-              f"Affichage d'une ligne droite de secours.")
+    except Exception as exc:
+        print(f"[avertissement] Tracé routier indisponible ({exc}). Affichage d'une ligne droite de secours.")
         return coords
 
 
 # ===========================================================================
-# 4) Page carte (Leaflet) générée et injectée dans QWebEngineView
+# 4) Page carte (Leaflet)
 # ===========================================================================
 
 def build_map_html(depot, stops, road_route):
@@ -234,7 +194,6 @@ if (DATA.route && DATA.route.length > 1) {{
   map.setView([DATA.depot.lat, DATA.depot.lon], 13);
 }}
 
-// Appelée depuis Python (runJavaScript) quand on clique une ligne du tableau
 function focusStop(orderNumber) {{
   const m = markers[orderNumber];
   if (m) {{
@@ -247,12 +206,14 @@ function focusStop(orderNumber) {{
 
 
 # ===========================================================================
-# 5) Widget panneau repliable (équivalent des menus déroulants de la maquette)
+# 5) Widget panneau repliable
 # ===========================================================================
 
 class CollapsiblePanel(QWidget):
     def __init__(self, title, start_open=True, parent=None):
         super().__init__(parent)
+
+        self.setAttribute(Qt.WA_StyledBackground, True) 
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -320,18 +281,25 @@ class LivreurApp(QMainWindow):
 
         root.addWidget(self._build_topbar())
 
+        # --- CORRECTION 1 : Intégration d'un QSplitter pour gérer l'espace dynamiquement ---
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setHandleWidth(8)
+        splitter.setStyleSheet(f"QSplitter::handle {{ background: transparent; }}")
+
+        sidebar = self._build_sidebar()
+        map_panel = self._build_map_panel()
+
+        splitter.addWidget(sidebar)
+        splitter.addWidget(map_panel)
+        splitter.setSizes([450, 830])  # Largeur de départ confortable pour le tableau
+
         body = QWidget()
-        body_layout = QHBoxLayout(body)
+        body_layout = QVBoxLayout(body)
         body_layout.setContentsMargins(10, 10, 10, 10)
-        body_layout.setSpacing(10)
+        body_layout.addWidget(splitter)
         root.addWidget(body)
 
-        body_layout.addWidget(self._build_sidebar(), 0)
-        body_layout.addWidget(self._build_map_panel(), 1)
-
         self._load_data()
-
-    # ------------------------------------------------------------- topbar --
 
     def _build_topbar(self):
         bar = QFrame()
@@ -341,7 +309,7 @@ class LivreurApp(QMainWindow):
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(18, 0, 18, 0)
 
-        brand = QLabel("📦 Ma Tournée")
+        brand = QLabel("Ma Tournée")
         brand.setStyleSheet(f"color:{BLUE_DARK}; font-weight:700; font-size:14px;")
 
         breadcrumb = QLabel("   Livreur  ›  Tournée du jour")
@@ -360,10 +328,11 @@ class LivreurApp(QMainWindow):
         layout.addWidget(driver)
         return bar
 
-    # ------------------------------------------------------------ sidebar --
-
     def _build_sidebar(self):
         sidebar_content = QWidget()
+        # --- AJOUT : On s'assure que le fond du grand conteneur ne devient pas noir ---
+        sidebar_content.setStyleSheet("background: transparent;")
+        
         layout = QVBoxLayout(sidebar_content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
@@ -376,16 +345,18 @@ class LivreurApp(QMainWindow):
         self._build_orders_table(self.panel_orders.content_layout)
         layout.addWidget(self.panel_orders, 1)
 
-        self.panel_legend = CollapsiblePanel("Légende", start_open=False)
-        self._build_legend(self.panel_legend.content_layout)
-        layout.addWidget(self.panel_legend)
+        # (Note : Le bloc de la légende a bien été retiré ici comme demandé)
 
         scroll = QScrollArea()
         scroll.setWidget(sidebar_content)
         scroll.setWidgetResizable(True)
-        scroll.setFixedWidth(370)
+        scroll.setMinimumWidth(380)
         scroll.setFrameShape(QFrame.NoFrame)
+        
+        # --- CORRECTION ICI : On nettoie le ScrollArea ET sa vitre interne (viewport) ---
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        scroll.viewport().setStyleSheet("background: transparent;")
+        
         return scroll
 
     def _build_summary(self, layout):
@@ -433,50 +404,46 @@ class LivreurApp(QMainWindow):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(False)
         self.table.setShowGrid(False)
-        self.table.setMinimumHeight(220)
+        self.table.setMinimumHeight(280)
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.table.setWordWrap(True)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         for col in (0, 1, 3, 4, 5):
             header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
 
+        # --- CORRECTION ICI : Ajout de color: {INK} partout pour contrer le Mode Sombre ---
         self.table.setStyleSheet(f"""
             QTableWidget {{
-                border: none; font-size: 11px; gridline-color: {LINE};
+                border: none; 
+                font-size: 11px; 
+                gridline-color: {LINE};
+                background: {PANEL_BG};
+                color: {INK};  /* <-- Force le texte global en noir/sombre */
             }}
             QHeaderView::section {{
-                background: #fafbfc; color: {INK_SOFT};
-                font-size: 10px; font-weight: 600;
-                padding: 6px; border: none; border-bottom: 1px solid {LINE};
+                background: #fafbfc; 
+                color: {INK_SOFT};
+                font-size: 10px; 
+                font-weight: 600;
+                padding: 6px; 
+                border: none; 
+                border-bottom: 1px solid {LINE};
             }}
-            QTableWidget::item {{ padding: 4px; }}
+            QTableWidget::item {{ 
+                padding: 6px 4px; 
+                color: {INK};  /* <-- Force les cellules non-sélectionnées en noir/sombre */
+            }}
             QTableWidget::item:selected {{
-                background: {BLUE_PALE}; color: {INK};
+                background: {BLUE_PALE}; 
+                color: {INK};
             }}
         """)
 
         self.table.itemSelectionChanged.connect(self._on_row_selected)
         layout.addWidget(self.table)
-
-    def _build_legend(self, layout):
-        rows = [
-            ("⚫", "Dépôt de départ"),
-            ("🔵", "Arrêt de livraison"),
-            ("—", "Itinéraire (suit les routes réelles via OSRM)"),
-        ]
-        for icon, text in rows:
-            row = QHBoxLayout()
-            icon_lbl = QLabel(icon)
-            icon_lbl.setStyleSheet(f"color:{BLUE}; font-size:12px;")
-            text_lbl = QLabel(text)
-            text_lbl.setStyleSheet(f"color:{INK_SOFT}; font-size:11px;")
-            row.addWidget(icon_lbl)
-            row.addWidget(text_lbl)
-            row.addStretch()
-            layout.addLayout(row)
-
-    # --------------------------------------------------------- map panel --
 
     def _build_map_panel(self):
         frame = QFrame()
@@ -489,8 +456,6 @@ class LivreurApp(QMainWindow):
         layout.addWidget(self.web_view)
         return frame
 
-    # -------------------------------------------------------------- data --
-
     def _load_data(self):
         info = ROUTE_INFO
         h, m = divmod(info["temps_trajet_min"], 60)
@@ -498,9 +463,7 @@ class LivreurApp(QMainWindow):
         self.summary_labels["stops"].setText(str(info["nb_stops"]))
         self.summary_labels["volume"].setText(str(info["volume_total"]))
         self.summary_labels["distance"].setText(f"{info['distance_km']} km")
-        self.depart_label.setText(
-            f"Départ prévu à {info['heure_depart']} depuis {DEPOT['nom']}"
-        )
+        self.depart_label.setText(f"Départ prévu à {info['heure_depart']} depuis {DEPOT['nom']}")
 
         stops = []
         ordered_coords = [(DEPOT["lat"], DEPOT["lon"])]
@@ -524,16 +487,14 @@ class LivreurApp(QMainWindow):
                 if col == 0:
                     item.setTextAlignment(Qt.AlignCenter)
                 self.table.setItem(row, col, item)
-            # On garde le numéro de commande accessible sur la ligne
             self.table.item(row, 0).setData(Qt.UserRole, order_number)
 
-        # Calcule le tracé qui suit réellement les routes (OSRM)
-        road_route = fetch_road_route(ordered_coords)
+        # --- CORRECTION 4 : Ajuster la hauteur de chaque ligne après remplissage des cellules ---
+        self.table.resizeRowsToContents()
 
+        road_route = fetch_road_route(ordered_coords)
         html = build_map_html(DEPOT, stops, road_route)
         self.web_view.setHtml(html, QUrl("https://localhost/"))
-
-    # ------------------------------------------------------- interaction --
 
     def _on_row_selected(self):
         selected = self.table.selectedItems()
