@@ -1,84 +1,34 @@
 import sys
-import json
-
+import os
 import requests
+
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QFrame, QToolButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QGridLayout, QSizePolicy, QAbstractItemView, QScrollArea,
-    QSplitter  # <-- Ajouté pour le redimensionnement fluide
+    QSplitter
 )
-from PySide6.QtWebEngineWidgets import QWebEngineView
-
+# On remplace le moteur Web par le moteur graphique Quick de Qt
+from PySide6.QtQuickWidgets import QQuickWidget 
 
 # ===========================================================================
-# 1) "Base de données" des commandes
+# 1) Données de la tournée
 # ===========================================================================
 
 ORDERS_DB = {
-    "6A14837201FR": {
-        "adresse": "12 Rue de Rivoli, 75004 Paris",
-        "lat": 48.8556, "lon": 2.3611,
-        "date_commande": "24/06/2026",
-        "date_limite": "30/06/2026",
-        "volume": 3,
-    },
-    "6A14837202FR": {
-        "adresse": "5 Avenue des Gobelins, 75013 Paris",
-        "lat": 48.8389, "lon": 2.3540,
-        "date_commande": "25/06/2026",
-        "date_limite": "29/06/2026",
-        "volume": 1,
-    },
-    "6A14837203FR": {
-        "adresse": "18 Rue Mouffetard, 75005 Paris",
-        "lat": 48.8440, "lon": 2.3499,
-        "date_commande": "23/06/2026",
-        "date_limite": "29/06/2026",
-        "volume": 2,
-    },
-    "6A14837204FR": {
-        "adresse": "7 Boulevard Saint-Marcel, 75013 Paris",
-        "lat": 48.8378, "lon": 2.3621,
-        "date_commande": "26/06/2026",
-        "date_limite": "01/07/2026",
-        "volume": 5,
-    },
-    "6A14837205FR": {
-        "adresse": "31 Rue Monge, 75005 Paris",
-        "lat": 48.8447, "lon": 2.3508,
-        "date_commande": "25/06/2026",
-        "date_limite": "30/06/2026",
-        "volume": 1,
-    },
-    "6A14837206FR": {
-        "adresse": "60 Rue de la Glaciere, 75013 Paris",
-        "lat": 48.8323, "lon": 2.3475,
-        "date_commande": "27/06/2026",
-        "date_limite": "01/07/2026",
-        "volume": 4,
-    },
-    "6A14837207FR": {
-        "adresse": "2 Place d'Italie, 75013 Paris",
-        "lat": 48.8313, "lon": 2.3559,
-        "date_commande": "24/06/2026",
-        "date_limite": "29/06/2026",
-        "volume": 2,
-    },
+    "6A14837201FR": {"adresse": "12 Rue de Rivoli, 75004 Paris", "lat": 48.8556, "lon": 2.3611, "date_commande": "24/06/2026", "date_limite": "30/06/2026", "volume": 3},
+    "6A14837202FR": {"adresse": "5 Avenue des Gobelins, 75013 Paris", "lat": 48.8389, "lon": 2.3540, "date_commande": "25/06/2026", "date_limite": "29/06/2026", "volume": 1},
+    "6A14837203FR": {"adresse": "18 Rue Mouffetard, 75005 Paris", "lat": 48.8440, "lon": 2.3499, "date_commande": "23/06/2026", "date_limite": "29/06/2026", "volume": 2},
+    "6A14837204FR": {"adresse": "7 Boulevard Saint-Marcel, 75013 Paris", "lat": 48.8378, "lon": 2.3621, "date_commande": "26/06/2026", "date_limite": "01/07/2026", "volume": 5},
+    "6A14837205FR": {"adresse": "31 Rue Monge, 75005 Paris", "lat": 48.8447, "lon": 2.3508, "date_commande": "25/06/2026", "date_limite": "30/06/2026", "volume": 1},
+    "6A14837206FR": {"adresse": "60 Rue de la Glaciere, 75013 Paris", "lat": 48.8323, "lon": 2.3475, "date_commande": "27/06/2026", "date_limite": "01/07/2026", "volume": 4},
+    "6A14837207FR": {"adresse": "2 Place d'Italie, 75013 Paris", "lat": 48.8313, "lon": 2.3559, "date_commande": "24/06/2026", "date_limite": "29/06/2026", "volume": 2},
 }
 
 DEPOT = {"nom": "Dépôt - Bercy", "lat": 48.8389, "lon": 2.3833}
 
-OPTIMIZED_ROUTE = [
-    "6A14837201FR",
-    "6A14837203FR",
-    "6A14837205FR",
-    "6A14837207FR",
-    "6A14837202FR",
-    "6A14837206FR",
-    "6A14837204FR",
-]
+OPTIMIZED_ROUTE = ["6A14837201FR", "6A14837203FR", "6A14837205FR", "6A14837207FR", "6A14837202FR", "6A14837206FR", "6A14837204FR"]
 
 ROUTE_INFO = {
     "temps_trajet_min": 96,
@@ -97,123 +47,101 @@ LINE = "#e3e7ee"
 BG = "#f5f7fa"
 PANEL_BG = "#ffffff"
 
+# ===========================================================================
+# 2) Code de la carte en QML (Le "HTML" version Qt Graphique)
+# ===========================================================================
+
+QML_MAP_CODE = f"""import QtQuick
+import QtLocation
+import QtPositioning
+
+Rectangle {{
+    id: root
+    anchors.fill: parent
+    color: "white"
+
+    Plugin {{
+        id: mapPlugin
+        name: "osm" // Utilise le moteur OpenStreetMap natif de Qt
+    }}
+
+    Map {{
+        id: mainMap
+        anchors.fill: parent
+        plugin: mapPlugin
+        center: QtPositioning.coordinate({DEPOT['lat']}, {DEPOT['lon']})
+        zoomLevel: 13
+
+        // Tracé de la route
+        MapPolyline {{
+            id: routeLine
+            line.color: "{BLUE}"
+            line.width: 4
+        }}
+
+        // Affichage dynamique des marqueurs (Reçoit la liste Python)
+        MapItemView {{
+            model: stopsModel
+            delegate: MapQuickItem {{
+                coordinate: QtPositioning.coordinate(modelData.lat, modelData.lon)
+                anchorPoint: Qt.point(13, 13)
+                sourceItem: Rectangle {{
+                    width: 26; height: 26; radius: 13
+                    color: modelData.isDepot ? "{INK}" : "{BLUE}"
+                    border.color: "white"; border.width: 2
+                    Text {{
+                        anchors.centerIn: parent
+                        text: modelData.label
+                        color: "white"
+                        font.bold: true
+                        font.pixelSize: 11
+                    }}
+                }}
+            }}
+        }}
+    }}
+
+    // Fonctions appelables directement depuis Python
+    function setRoutePath(pathPoints) {{
+        var path = [];
+        for (var i = 0; i < pathPoints.length; i++) {{
+            path.push(QtPositioning.coordinate(pathPoints[i].lat, pathPoints[i].lon));
+        }}
+        routeLine.path = path;
+    }}
+
+    function centerOnStop(lat, lon) {{
+        mainMap.center = QtPositioning.coordinate(lat, lon);
+        mainMap.zoomLevel = 16;
+    }}
+}}
+"""
 
 # ===========================================================================
-# 3) Routage réel le long des rues (OSRM)
+# 3) Routage OSRM
 # ===========================================================================
 
 def fetch_road_route(coords):
     coord_str = ";".join(f"{lon},{lat}" for lat, lon in coords)
     url = f"https://router.project-osrm.org/route/v1/driving/{coord_str}"
     params = {"overview": "full", "geometries": "geojson"}
-
     try:
         resp = requests.get(url, params=params, timeout=8)
         resp.raise_for_status()
-        payload = resp.json()
-        geometry = payload["routes"][0]["geometry"]["coordinates"]
-        return [(lat, lon) for lon, lat in geometry]
+        geometry = resp.json()["routes"][0]["geometry"]["coordinates"]
+        return [{"lat": lat, "lon": lon} for lon, lat in geometry]
     except Exception as exc:
-        print(f"[avertissement] Tracé routier indisponible ({exc}). Affichage d'une ligne droite de secours.")
-        return coords
-
-
-# ===========================================================================
-# 4) Page carte (Leaflet)
-# ===========================================================================
-
-def build_map_html(depot, stops, road_route):
-    payload = {
-        "depot": depot,
-        "stops": [
-            {
-                "lat": s["lat"], "lon": s["lon"], "label": str(s["ordre"]),
-                "order_number": s["numero_commande"], "address": s["adresse"],
-                "volume": s["volume"], "due": s["date_limite"],
-            }
-            for s in stops
-        ],
-        "route": road_route,
-    }
-    data_json = json.dumps(payload)
-
-    return f"""<!DOCTYPE html>
-<html><head>
-<meta charset="utf-8">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<style>
-  html, body, #map {{ margin:0; padding:0; height:100%; width:100%; }}
-  .pin {{
-    background:{BLUE}; color:white; width:26px; height:26px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center; font-size:12px;
-    font-weight:700; border:2px solid white; box-shadow:0 1px 3px rgba(0,0,0,.35);
-  }}
-  .pin-depot {{ background:{INK}; }}
-  .leaflet-popup-content {{ font-size:12.5px; font-family:'Segoe UI',sans-serif; }}
-</style>
-</head>
-<body>
-<div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-const DATA = {data_json};
-const map = L.map('map');
-
-L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-  attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
-}}).addTo(map);
-
-function numberedIcon(label, isDepot) {{
-  return L.divIcon({{
-    className: '',
-    html: `<div class="pin ${{isDepot ? 'pin-depot' : ''}}">${{label}}</div>`,
-    iconSize: [26, 26], iconAnchor: [13, 13]
-  }});
-}}
-
-const markers = {{}};
-
-L.marker([DATA.depot.lat, DATA.depot.lon], {{icon: numberedIcon('D', true)}})
-  .addTo(map)
-  .bindPopup(`<b>Dépôt</b><br>${{DATA.depot.nom}}`);
-
-DATA.stops.forEach(s => {{
-  const m = L.marker([s.lat, s.lon], {{icon: numberedIcon(s.label, false)}}).addTo(map);
-  m.bindPopup(
-    `<b>Arrêt ${{s.label}} — ${{s.order_number}}</b><br>${{s.address}}` +
-    `<br>Volume : ${{s.volume}}<br>Livraison prévue : ${{s.due}}`
-  );
-  markers[s.order_number] = m;
-}});
-
-if (DATA.route && DATA.route.length > 1) {{
-  const latlngs = DATA.route.map(p => [p[0], p[1]]);
-  L.polyline(latlngs, {{color: '{BLUE}', weight: 4, opacity: 0.85}}).addTo(map);
-  map.fitBounds(latlngs, {{padding: [40, 40]}});
-}} else {{
-  map.setView([DATA.depot.lat, DATA.depot.lon], 13);
-}}
-
-function focusStop(orderNumber) {{
-  const m = markers[orderNumber];
-  if (m) {{
-    map.setView(m.getLatLng(), 15, {{animate: true}});
-    m.openPopup();
-  }}
-}}
-</script>
-</body></html>"""
-
+        print(f"[Avertissement] OSRM indisponible. Ligne droite de secours.")
+        return [{"lat": lat, "lon": lon} for lat, lon in coords]
 
 # ===========================================================================
-# 5) Widget panneau repliable
+# 4) Composants d'interface
 # ===========================================================================
 
 class CollapsiblePanel(QWidget):
     def __init__(self, title, start_open=True, parent=None):
         super().__init__(parent)
-
-        self.setAttribute(Qt.WA_StyledBackground, True) 
+        self.setAttribute(Qt.WA_StyledBackground, True)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -225,18 +153,7 @@ class CollapsiblePanel(QWidget):
         self.toggle_btn.setChecked(start_open)
         self.toggle_btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self.toggle_btn.setArrowType(Qt.DownArrow if start_open else Qt.RightArrow)
-        self.toggle_btn.setStyleSheet(f"""
-            QToolButton {{
-                background: {PANEL_BG};
-                border: none;
-                border-bottom: 1px solid {LINE};
-                padding: 10px 4px;
-                font-weight: 600;
-                font-size: 13px;
-                color: {INK};
-                text-align: left;
-            }}
-        """)
+        self.toggle_btn.setStyleSheet(f"QToolButton {{ background: {PANEL_BG}; border: none; border-bottom: 1px solid {LINE}; padding: 10px 4px; font-weight: 600; font-size: 13px; color: {INK}; text-align: left; }}")
         self.toggle_btn.clicked.connect(self._toggle)
 
         self.content = QWidget()
@@ -247,31 +164,31 @@ class CollapsiblePanel(QWidget):
 
         outer.addWidget(self.toggle_btn)
         outer.addWidget(self.content)
-
-        self.setStyleSheet(f"""
-            CollapsiblePanel {{
-                background: {PANEL_BG};
-                border: 1px solid {LINE};
-                border-radius: 8px;
-            }}
-        """)
+        self.setStyleSheet(f"CollapsiblePanel {{ background: {PANEL_BG}; border: 1px solid {LINE}; border-radius: 8px; }}")
 
     def _toggle(self):
         opened = self.toggle_btn.isChecked()
         self.content.setVisible(opened)
         self.toggle_btn.setArrowType(Qt.DownArrow if opened else Qt.RightArrow)
 
-
 # ===========================================================================
-# 6) Fenêtre principale
+# 5) Fenêtre principale
 # ===========================================================================
 
 class LivreurApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Ma Tournée — Livreur")
+        self.setWindowTitle("Ma Tournée — Livreur (Mode Natif)")
         self.resize(1280, 760)
         self.setStyleSheet(f"QMainWindow {{ background: {BG}; }}")
+
+        # --- CORRECTION ICI : On récupère dynamiquement le dossier du script ---
+        dossier_du_script = os.path.dirname(os.path.abspath(__file__))
+        self.qml_filename = os.path.join(dossier_du_script, "map_native.qml")
+
+        # Écriture du fichier de carte QML temporaire au bon endroit
+        with open(self.qml_filename, "w", encoding="utf-8") as f:
+            f.write(QML_MAP_CODE)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -281,17 +198,13 @@ class LivreurApp(QMainWindow):
 
         root.addWidget(self._build_topbar())
 
-        # --- CORRECTION 1 : Intégration d'un QSplitter pour gérer l'espace dynamiquement ---
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(8)
-        splitter.setStyleSheet(f"QSplitter::handle {{ background: transparent; }}")
+        splitter.setStyleSheet("QSplitter::handle { background: transparent; }")
 
-        sidebar = self._build_sidebar()
-        map_panel = self._build_map_panel()
-
-        splitter.addWidget(sidebar)
-        splitter.addWidget(map_panel)
-        splitter.setSizes([450, 830])  # Largeur de départ confortable pour le tableau
+        splitter.addWidget(self._build_sidebar())
+        splitter.addWidget(self._build_map_panel())
+        splitter.setSizes([450, 830])
 
         body = QWidget()
         body_layout = QVBoxLayout(body)
@@ -305,22 +218,15 @@ class LivreurApp(QMainWindow):
         bar = QFrame()
         bar.setFixedHeight(52)
         bar.setStyleSheet(f"background:{PANEL_BG}; border-bottom:1px solid {LINE};")
-
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(18, 0, 18, 0)
 
-        brand = QLabel("Ma Tournée")
+        brand = QLabel("📦 Ma Tournée")
         brand.setStyleSheet(f"color:{BLUE_DARK}; font-weight:700; font-size:14px;")
-
-        breadcrumb = QLabel("   Livreur  ›  Tournée du jour")
+        breadcrumb = QLabel("   Livreur  ›  Tournée du jour (Natif)")
         breadcrumb.setStyleSheet(f"color:{INK_SOFT}; font-size:12px;")
-
         driver = QLabel("Aymen B. — Tournée Paris 13")
-        driver.setStyleSheet(f"""
-            background:{BLUE_PALE}; color:{BLUE_DARK};
-            font-weight:600; font-size:12px;
-            padding:5px 12px; border-radius:11px;
-        """)
+        driver.setStyleSheet(f"background:{BLUE_PALE}; color:{BLUE_DARK}; font-weight:600; font-size:12px; padding:5px 12px; border-radius:11px;")
 
         layout.addWidget(brand)
         layout.addWidget(breadcrumb)
@@ -330,9 +236,7 @@ class LivreurApp(QMainWindow):
 
     def _build_sidebar(self):
         sidebar_content = QWidget()
-        # --- AJOUT : On s'assure que le fond du grand conteneur ne devient pas noir ---
         sidebar_content.setStyleSheet("background: transparent;")
-        
         layout = QVBoxLayout(sidebar_content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
@@ -345,18 +249,13 @@ class LivreurApp(QMainWindow):
         self._build_orders_table(self.panel_orders.content_layout)
         layout.addWidget(self.panel_orders, 1)
 
-        # (Note : Le bloc de la légende a bien été retiré ici comme demandé)
-
         scroll = QScrollArea()
         scroll.setWidget(sidebar_content)
         scroll.setWidgetResizable(True)
         scroll.setMinimumWidth(380)
         scroll.setFrameShape(QFrame.NoFrame)
-        
-        # --- CORRECTION ICI : On nettoie le ScrollArea ET sa vitre interne (viewport) ---
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
         scroll.viewport().setStyleSheet("background: transparent;")
-        
         return scroll
 
     def _build_summary(self, layout):
@@ -365,12 +264,7 @@ class LivreurApp(QMainWindow):
         layout.addLayout(grid)
 
         self.summary_labels = {}
-        items = [
-            ("temps", "Temps estimé"),
-            ("stops", "Stops"),
-            ("volume", "Volume total"),
-            ("distance", "Distance"),
-        ]
+        items = [("temps", "Temps estimé"), ("stops", "Stops"), ("volume", "Volume total"), ("distance", "Distance")]
         for i, (key, label) in enumerate(items):
             cell = QFrame()
             cell.setStyleSheet(f"background:{BLUE_PALE}; border-radius:8px;")
@@ -386,7 +280,6 @@ class LivreurApp(QMainWindow):
             cell_layout.addWidget(value_lbl)
             cell_layout.addWidget(label_lbl)
             grid.addWidget(cell, i // 2, i % 2)
-
             self.summary_labels[key] = value_lbl
 
         self.depart_label = QLabel("")
@@ -402,11 +295,8 @@ class LivreurApp(QMainWindow):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setAlternatingRowColors(False)
         self.table.setShowGrid(False)
         self.table.setMinimumHeight(280)
-        self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
         self.table.setWordWrap(True)
 
         header = self.table.horizontalHeader()
@@ -414,34 +304,12 @@ class LivreurApp(QMainWindow):
         for col in (0, 1, 3, 4, 5):
             header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
 
-        # --- CORRECTION ICI : Ajout de color: {INK} partout pour contrer le Mode Sombre ---
         self.table.setStyleSheet(f"""
-            QTableWidget {{
-                border: none; 
-                font-size: 11px; 
-                gridline-color: {LINE};
-                background: {PANEL_BG};
-                color: {INK};  /* <-- Force le texte global en noir/sombre */
-            }}
-            QHeaderView::section {{
-                background: #fafbfc; 
-                color: {INK_SOFT};
-                font-size: 10px; 
-                font-weight: 600;
-                padding: 6px; 
-                border: none; 
-                border-bottom: 1px solid {LINE};
-            }}
-            QTableWidget::item {{ 
-                padding: 6px 4px; 
-                color: {INK};  /* <-- Force les cellules non-sélectionnées en noir/sombre */
-            }}
-            QTableWidget::item:selected {{
-                background: {BLUE_PALE}; 
-                color: {INK};
-            }}
+            QTableWidget {{ border: none; font-size: 11px; gridline-color: {LINE}; background: {PANEL_BG}; color: {INK}; }}
+            QHeaderView::section {{ background: #fafbfc; color: {INK_SOFT}; font-size: 10px; font-weight: 600; padding: 6px; border: none; border-bottom: 1px solid {LINE}; }}
+            QTableWidget::item {{ padding: 6px 4px; color: {INK}; }}
+            QTableWidget::item:selected {{ background: {BLUE_PALE}; color: {INK}; }}
         """)
-
         self.table.itemSelectionChanged.connect(self._on_row_selected)
         layout.addWidget(self.table)
 
@@ -451,58 +319,66 @@ class LivreurApp(QMainWindow):
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self.web_view = QWebEngineView()
-        self.web_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.addWidget(self.web_view)
+        # --- INSTANCIATION DU COMPOSANT NATIF ---
+        self.quick_map = QQuickWidget()
+        self.quick_map.setResizeMode(QQuickWidget.SizeRootObjectToView)
+        layout.addWidget(self.quick_map)
         return frame
 
     def _load_data(self):
         info = ROUTE_INFO
-        h, m = divmod(info["temps_trajet_min"], 60)
-        self.summary_labels["temps"].setText(f"{h}h{m:02d}")
+        self.summary_labels["temps"].setText(f"{divmod(info['temps_trajet_min'], 60)[0]}h{divmod(info['temps_trajet_min'], 60)[1]:02d}")
         self.summary_labels["stops"].setText(str(info["nb_stops"]))
         self.summary_labels["volume"].setText(str(info["volume_total"]))
         self.summary_labels["distance"].setText(f"{info['distance_km']} km")
         self.depart_label.setText(f"Départ prévu à {info['heure_depart']} depuis {DEPOT['nom']}")
 
-        stops = []
+        # Préparation de la liste des arrêts pour la carte QML
+        qml_stops = [{"lat": DEPOT["lat"], "lon": DEPOT["lon"], "label": "D", "isDepot": True}]
         ordered_coords = [(DEPOT["lat"], DEPOT["lon"])]
 
         self.table.setRowCount(len(OPTIMIZED_ROUTE))
         for row, order_number in enumerate(OPTIMIZED_ROUTE):
             d = ORDERS_DB[order_number]
-            stops.append({
-                "ordre": row + 1,
-                "numero_commande": order_number,
-                **d,
-            })
+            qml_stops.append({"lat": d["lat"], "lon": d["lon"], "label": str(row + 1), "isDepot": False})
             ordered_coords.append((d["lat"], d["lon"]))
 
-            values = [
-                str(row + 1), order_number, d["adresse"],
-                str(d["volume"]), d["date_commande"], d["date_limite"],
-            ]
+            values = [str(row + 1), order_number, d["adresse"], str(d["volume"]), d["date_commande"], d["date_limite"]]
             for col, value in enumerate(values):
                 item = QTableWidgetItem(value)
-                if col == 0:
-                    item.setTextAlignment(Qt.AlignCenter)
+                if col == 0: item.setTextAlignment(Qt.AlignCenter)
                 self.table.setItem(row, col, item)
             self.table.item(row, 0).setData(Qt.UserRole, order_number)
 
-        # --- CORRECTION 4 : Ajuster la hauteur de chaque ligne après remplissage des cellules ---
         self.table.resizeRowsToContents()
 
+        # Injection des données d'arrêts directement dans le contexte QML
+        self.quick_map.rootContext().setContextProperty("stopsModel", qml_stops)
+        self.quick_map.setSource(QUrl.fromLocalFile(self.qml_filename))
+
+        # Calcul de la route (OSRM) et mise à jour synchrone du tracé QML
         road_route = fetch_road_route(ordered_coords)
-        html = build_map_html(DEPOT, stops, road_route)
-        self.web_view.setHtml(html, QUrl("https://localhost/"))
+        root_qml_object = self.quick_map.rootObject()
+        if root_qml_object:
+            root_qml_object.setRoutePath(road_route)
 
     def _on_row_selected(self):
         selected = self.table.selectedItems()
-        if not selected:
-            return
+        if not selected: return
         row = selected[0].row()
         order_number = self.table.item(row, 0).data(Qt.UserRole)
-        self.web_view.page().runJavaScript(f"focusStop('{order_number}');")
+        
+        # Récupération des coordonnées et recentrage natif
+        d = ORDERS_DB[order_number]
+        root_qml_object = self.quick_map.rootObject()
+        if root_qml_object:
+            root_qml_object.centerOnStop(d["lat"], d["lon"])
+
+    def closeEvent(self, event):
+        # Nettoyage du fichier QML au moment de fermer
+        if os.path.exists(self.qml_filename):
+            os.remove(self.qml_filename)
+        event.accept()
 
 
 if __name__ == "__main__":
