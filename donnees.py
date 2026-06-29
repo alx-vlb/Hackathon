@@ -29,12 +29,10 @@ def lire_scenario(nom_fichier):
 
 infos, demande = lire_scenario("mines_tms_instances/A_D_E_0.txt")
 
-print(infos)
-print(demande)
+'''print(infos)
+print(demande)'''
 
 #Générer graphe
-
-
 
 def generer_coordonnees(nb_clients, delta=20):
     """
@@ -56,10 +54,10 @@ def generer_coordonnees(nb_clients, delta=20):
     return coordonnees
 
 #Test
-infos, demande = lire_scenario("mines_tms_instances/A_D_E_4.txt")
+'''infos, demande = lire_scenario("mines_tms_instances/A_D_E_4.txt")
 nb_clients = infos[0]
 coordonnees = generer_coordonnees(nb_clients)
-print(coordonnees)
+print(coordonnees)'''
 
 #Calcul de la distance entre 2 points 
 
@@ -72,9 +70,9 @@ def distance(a,b):
  d = np.sqrt((x1-x2)**2 + (y1-y2)**2)
  return d
  
-a = coordonnees[0]
+'''a = coordonnees[0]
 b = coordonnees[1]
-print(distance(a,b))
+print(distance(a,b))'''
 
 
 #generation de coordonnées GPS autour de Paris
@@ -92,8 +90,8 @@ def generer_coordonnees_gps(nb_clients):
     return coordonnees
 
 #Test
-nb_clients = infos[0]
-print(generer_coordonnees_gps(nb_clients))
+'''nb_clients = infos[0]
+print(generer_coordonnees_gps(nb_clients))'''
 
 
 #generer adresses aleatoires puis conversion en coordonnées GPS
@@ -201,17 +199,15 @@ rues = [
     "Place de la Nation"
 ]
 
-import random
-
 def generer_adresse_aléatoire():
     numero = random.randint(1, 250)
     rue = random.choice(rues)
     return f"{numero} {rue}, Paris"
 
 #test
-for _ in range(5):
+'''for _ in range(5):
     adresse = generer_adresse_aléatoire()
     geolocator = Nominatim(user_agent="projet_livraison")
     location = geolocator.geocode(adresse)
-    print((location.latitude,location.longitude))
+    print((location.latitude,location.longitude))'''
 
