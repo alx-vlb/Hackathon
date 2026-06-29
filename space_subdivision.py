@@ -5,7 +5,7 @@ from donnees import lire_scenario, generer_coordonnees
 def space_subdiv(li_clients, P_max_camion, li_poids):
     zones = [] 
     for i in range(len(li_clients)):
-        zones.append([li_clients[i],1,li_poids[i],li_clients[i]]) 
+        zones.append([li_clients[i],1,li_poids[i],[li_clients[i]]]) 
     fusion_possible=True
 
     while fusion_possible:

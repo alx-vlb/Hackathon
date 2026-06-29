@@ -1,17 +1,19 @@
-On a une liste de points gps ave un indice le client_id
+On a une liste de points (li_clients) gps ave un indice le client_id
 Grâce au client_id on peut trouver la colonne du client dasn la matrice des commandes
-et alors on peuttoruver le nombre de colis par client pr chaque jour
+on utilise alors li_poids qui est indexé comme li_clients mais avec ici le poids de la commande de chaque client
 
+On va diviser l'espace en zones géographiques où un seul camion pourra faire toute la distribution
 
-On va choisir un poids par région P_max_i
-on va diviser en très petites zones géographiques un grand espace e
-On va tout mettre dans une liste de régions qui sont encore à fusionner 
-pour chacune de ces régions on calcule le poids totale dans la région
-s'il y'a déjà des P_i>P_max_i, on divise par 2 la surface des régions...
+On crée N zones pour N clients
+1 zone est définie par un centroide, un nombre de client, un poids total, et les coordonnées de chaque client
 
-Donc là on a une liste de régions avec P_i<P_max_i
+Tant qu'il y a une fusion possible
+    On calcule la matrice de distance 
+    on trie la liste des distances entre 2 points par ordre croissant'
+    
+    Tant qu'on a pas trouvé de fusion on prend la distance la plus petite entre 2 points
+        on regarde si le poids cumulés de ces 2 zones est tjr < au poids max d'un camion
+        si c'est le cas on fusionne et on modifie la liste zone et on repart au calcule  de la matrice des distances
+        si ce n'est pas le cas on passe au couple de points suivant 
+    si on a testé toutes les fusions et que aucune n'est possible alors on sort et c'est fini
 
-#Il faut avoir une matrice de distance d'un clients à l'autre et avoir une fonction(n)
-qui donne la liste de n voisins
-
-Ensuite on teste la fusion avec les n voisins et dès qu'il y a une fusion qui donne un nouveau P_i<P_max_i
