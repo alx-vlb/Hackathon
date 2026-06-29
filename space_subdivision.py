@@ -1,6 +1,6 @@
 
 from opti import matrice_distance
-from donnees import lire_scenario
+from donnees import lire_scenario, generer_coordonnees
 
 def space_subdiv(li_clients, P_max_camion, li_poids):
     zones = [] 
@@ -36,5 +36,11 @@ def space_subdiv(li_clients, P_max_camion, li_poids):
     return zones    #zones est une liste de zones, chaque zone est une liste contenant le centroïde, le nombre de clients, le poids total et la liste des clients
 
             
+infos, demande = lire_scenario("mines_tms_instances/A_D_E_0.txt")
+nb_client = infos[0]
+li_client = generer_coordonnees(nb_client, delta=20 )[1:]
+P_max_camion = infos[-1]
+li_poids = demande[0]
 
+print(space_subdiv(li_client, P_max_camion, li_poids))
 
