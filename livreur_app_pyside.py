@@ -1,6 +1,7 @@
 import sys
 import os
 import requests
+import colorsys
 
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtWidgets import (
@@ -12,7 +13,27 @@ from PySide6.QtWidgets import (
 from PySide6.QtQuickWidgets import QQuickWidget
 
 # ===========================================================================
-# 1) Base de données unifiée (Magasin, Commandes et Tournées)
+# 1) Générateur de Couleurs Dynamiques (Jusqu'à 100 teintes distinctes)
+# ===========================================================================
+
+def get_route_color(index, total_max=100):
+    """
+    Génère une couleur Hexadécimale unique et très contrastée.
+    Distribue les teintes équitablement sur le cercle chromatique (espace HSV).
+    """
+    # On utilise le nombre d'or (0.618033988749895) pour maximiser la dispersion des couleurs consécutives
+    golden_ratio_conjugate = 0.618033988749895
+    hue = (index * golden_ratio_conjugate) % 1.0
+    
+    # Saturation et luminosité élevées pour une visibilité optimale sur la carte
+    saturation = 0.85
+    value = 0.90
+    
+    rgb = colorsys.hsv_to_rgb(hue, saturation, value)
+    return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+
+# ===========================================================================
+# 2) Données Simulées (Magasin, Commandes et Tournées)
 # ===========================================================================
 
 DEPOT = {"nom": "Dépôt - Bercy", "lat": 48.8389, "lon": 2.3833}
@@ -27,36 +48,20 @@ ORDERS_DB = {
     "6A14837207FR": {"adresse": "2 Place d'Italie, 75013 Paris", "lat": 48.8313, "lon": 2.3559, "date_commande": "24/06/2026", "date_limite": "29/06/2026", "volume": 2},
 }
 
-# Tournées planifiées avec leurs métadonnées de synthèse
-ROUTES = [
-    {
-        "id": "T-001", 
-        "date": "Aujourd'hui - 29/06/2026", 
-        "driver": "Aymen B.", 
-        "color": "#2563eb", 
-        "orders": ["6A14837201FR", "6A14837203FR", "6A14837205FR", "6A14837207FR"],
-        "stats": {"temps": "1h24", "distance": "12.4 km", "depart": "08:30"}
-    },
-    {
-        "id": "T-002", 
-        "date": "Aujourd'hui - 29/06/2026", 
-        "driver": "Sarah L.", 
-        "color": "#16a34a", 
-        "orders": ["6A14837202FR", "6A14837206FR"],
-        "stats": {"temps": "0h52", "distance": "8.1 km", "depart": "10:15"}
-    },
-    {
-        "id": "T-003", 
-        "date": "Demain - 30/06/2026", 
-        "driver": "Marc D.", 
-        "color": "#9333ea", 
-        "orders": ["6A14837204FR"],
-        "stats": {"temps": "0h45", "distance": "6.8 km", "depart": "09:00"}
-    },
+# Liste des tournées (sans couleur écrite en dur, on les attribue à l'initialisation)
+RAW_ROUTES = [
+    {"id": "T-001", "date": "Aujourd'hui - 29/06/2026", "driver": "Aymen B.", "orders": ["6A14837201FR", "6A14837203FR", "6A14837205FR", "6A14837207FR"], "stats": {"temps": "1h24", "distance": "12.4 km", "depart": "08:30"}},
+    {"id": "T-002", "date": "Aujourd'hui - 29/06/2026", "driver": "Sarah L.", "orders": ["6A14837202FR", "6A14837206FR"], "stats": {"temps": "0h52", "distance": "8.1 km", "depart": "10:15"}},
+    {"id": "T-003", "date": "Demain - 30/06/2026", "driver": "Marc D.", "orders": ["6A14837204FR"], "stats": {"temps": "0h45", "distance": "6.8 km", "depart": "09:00"}},
 ]
 
-# Thème graphique
-BLUE = "#2563eb"
+# Attribution automatique d'une couleur unique par index
+ROUTES = []
+for idx, r in enumerate(RAW_ROUTES):
+    r["color"] = get_route_color(idx)
+    ROUTES.append(r)
+
+# Thème graphique UI
 BLUE_DARK = "#1d4ed8"
 BLUE_PALE = "#eaf1fd"
 INK = "#1f2533"
@@ -66,11 +71,7 @@ BG = "#f5f7fa"
 PANEL_BG = "#ffffff"
 
 # ===========================================================================
-# 2) QML : Carte dynamique multi-tracés (Moteur Quick)
-# ===========================================================================
-
-# ===========================================================================
-# 2) QML : Carte dynamique multi-tracés (Points corrigés)
+# 3) QML : Carte dynamique multi-tracés (Points + Lignes de couleurs)
 # ===========================================================================
 
 QML_MAP_CODE = f"""import QtQuick
@@ -126,21 +127,18 @@ Rectangle {{
             mainMap.addMapItem(lineObj);
             drawnLines[routeId] = lineObj;
 
-            // 2. Tracé des marqueurs de livraison associés
+            // 2. Tracé des marqueurs (Lieux de livraison avec numéros d'étape)
             var markers = [];
             for (var j = 0; j < markerPoints.length; j++) {{
                 var m = markerPoints[j];
-                
-                // --- CORRECTION ICI : Ajout de "import QtPositioning;" au début de la chaîne ---
                 var markerStr = 'import QtQuick; import QtLocation; import QtPositioning; MapQuickItem {{ coordinate: QtPositioning.coordinate(' + m.lat + ',' + m.lon + '); anchorPoint: Qt.point(13,13); sourceItem: Rectangle {{ width:26; height:26; radius:13; color: "' + color + '"; border.color: "white"; border.width: 2; Text {{ anchors.centerIn: parent; text: "' + m.label + '"; color: "white"; font.bold: true; font.pixelSize: 11 }} }} }}';
-                
                 var markerObj = Qt.createQmlObject(markerStr, mainMap, "marker_" + routeId + "_" + j);
                 mainMap.addMapItem(markerObj);
                 markers.push(markerObj);
             }}
             drawnMarkers[routeId] = markers;
         }} else {{
-            // Nettoyage de la carte si décochée
+            // Nettoyage complet
             if (drawnLines[routeId]) {{ mainMap.removeMapItem(drawnLines[routeId]); drawnLines[routeId].destroy(); delete drawnLines[routeId]; }}
             if (drawnMarkers[routeId]) {{
                 for (var k = 0; k < drawnMarkers[routeId].length; k++) {{ mainMap.removeMapItem(drawnMarkers[routeId][k]); drawnMarkers[routeId][k].destroy(); }}
@@ -157,7 +155,7 @@ Rectangle {{
 """
 
 # ===========================================================================
-# 3) OSRM Engine
+# 4) OSRM Engine & UI Widgets
 # ===========================================================================
 
 def fetch_road_route(coords):
@@ -169,10 +167,6 @@ def fetch_road_route(coords):
         return [{"lat": lat, "lon": lon} for lon, lat in geometry]
     except:
         return [{"lat": lat, "lon": lon} for lat, lon in coords]
-
-# ===========================================================================
-# 4) Éléments UI Rétractables
-# ===========================================================================
 
 class CollapsiblePanel(QWidget):
     def __init__(self, title, start_open=True, parent=None):
@@ -208,7 +202,6 @@ class CollapsiblePanel(QWidget):
         self.toggle_btn.setArrowType(Qt.DownArrow if opened else Qt.RightArrow)
 
 class RouteCard(QFrame):
-    """Ligne cliquable épurée représentant une tournée dans le flux général"""
     on_details_requested = Signal(dict)
     on_visibility_toggled = Signal(dict, bool)
 
@@ -227,7 +220,7 @@ class RouteCard(QFrame):
         info_layout = QVBoxLayout()
         title = QLabel(f"Tournée {route_data['id']} — {route_data['driver']}")
         title.setStyleSheet(f"font-weight: bold; color: {INK}; font-size: 13px;")
-        subtitle = QLabel(f"📦 {len(route_data['orders'])} commandes  •  Départ prévu : {route_data['stats']['depart']}")
+        subtitle = QLabel(f"{len(route_data['orders'])} commandes  •  Départ : {route_data['stats']['depart']}")
         subtitle.setStyleSheet(f"font-size: 11px; color: {INK_SOFT};")
         info_layout.addWidget(title)
         info_layout.addWidget(subtitle)
@@ -243,17 +236,16 @@ class RouteCard(QFrame):
         layout.addWidget(btn_details)
 
 # ===========================================================================
-# 5) Fenêtre Principale / Application Manager
+# 5) Main Application Screen
 # ===========================================================================
 
 class ManagerApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Vue Globale Magasin — Dispatch & Flux Marchandises")
+        self.setWindowTitle("Vue Globale Magasin — Dispatch")
         self.resize(1340, 840)
         self.setStyleSheet(f"QMainWindow {{ background: {BG}; }}")
 
-        # Initialisation de la carte QML
         dossier_du_script = os.path.dirname(os.path.abspath(__file__))
         self.qml_filename = os.path.join(dossier_du_script, "map_manager.qml")
         with open(self.qml_filename, "w", encoding="utf-8") as f:
@@ -267,22 +259,18 @@ class ManagerApp(QMainWindow):
         
         root.addWidget(self._build_topbar())
 
-        # Splitter de l'application
         splitter = QSplitter(Qt.Horizontal)
         splitter.setStyleSheet("QSplitter::handle { background: transparent; }")
         
-        # --- BLOC ENKAPSUULATION GAUCHE : STACKED WIDGET ---
         self.left_container = QStackedWidget()
         self.left_container.setMinimumWidth(460)
         
-        # Création et empilement des deux vues natives
         self.view_dispatch = self._build_dispatch_page()
         self.view_details = self._build_details_page()
         
-        self.left_container.addWidget(self.view_dispatch) # Index 0
-        self.left_container.addWidget(self.view_details)  # Index 1
+        self.left_container.addWidget(self.view_dispatch)
+        self.left_container.addWidget(self.view_details)
         
-        # --- BLOC DROIT : PANNEAU CARTE ---
         self.map_frame = QFrame()
         self.map_frame.setStyleSheet(f"background:{PANEL_BG}; border:1px solid {LINE}; border-radius:8px;")
         map_layout = QVBoxLayout(self.map_frame)
@@ -310,7 +298,7 @@ class ManagerApp(QMainWindow):
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(18, 0, 18, 0)
 
-        brand = QLabel("📦 Flux Marchandises")
+        brand = QLabel("Flux Marchandises")
         brand.setStyleSheet(f"color:{BLUE_DARK}; font-weight:700; font-size:14px;")
         self.breadcrumb = QLabel("   Manager  ›  Tableau de Bord Général")
         self.breadcrumb.setStyleSheet(f"color:{INK_SOFT}; font-size:12px;")
@@ -320,9 +308,6 @@ class ManagerApp(QMainWindow):
         layout.addStretch()
         return bar
 
-    # ---------------------------------------------------------
-    # PAGE 1 : Tableau de bord Global (Dispatch)
-    # ---------------------------------------------------------
     def _build_dispatch_page(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -333,7 +318,6 @@ class ManagerApp(QMainWindow):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 8, 0)
 
-        # Regroupement automatique des données par Date
         grouped = {}
         for r in ROUTES:
             grouped.setdefault(r["date"], []).append(r)
@@ -368,25 +352,19 @@ class ManagerApp(QMainWindow):
         else:
             root_obj.toggleRoute(route_data["id"], "", [], [], False)
 
-    # ---------------------------------------------------------
-    # PAGE 2 : Vue Détaillée Identique à l'Ancienne Interface
-    # ---------------------------------------------------------
     def _build_details_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 8, 0)
         layout.setSpacing(10)
 
-        # Bouton de retour épuré
         btn_back = QPushButton("⬅ Retour au tableau général")
         btn_back.setStyleSheet(f"text-align: left; color: {INK_SOFT}; border: none; font-weight: bold; font-size: 12px; padding: 4px 0px;")
         btn_back.setCursor(Qt.PointingHandCursor)
         btn_back.clicked.connect(self._close_details)
         layout.addWidget(btn_back)
 
-        # 1. Le panneau Résumé Stylisé d'origine
         self.panel_summary = CollapsiblePanel("Résumé de la tournée sélectionnée")
-        
         grid = QGridLayout()
         grid.setSpacing(8)
         self.panel_summary.content_layout.addLayout(grid)
@@ -415,9 +393,7 @@ class ManagerApp(QMainWindow):
         self.panel_summary.content_layout.addWidget(self.depart_label)
         layout.addWidget(self.panel_summary)
 
-        # 2. Le Tableau de Livraisons Stylisé d'origine
         self.panel_orders = CollapsiblePanel("Livraisons de la tournée")
-        
         columns = ["#", "N° commande", "Adresse", "Vol.", "Commandée le", "Livraison prévue"]
         self.table = QTableWidget(0, len(columns))
         self.table.setHorizontalHeaderLabels(columns)
@@ -446,15 +422,10 @@ class ManagerApp(QMainWindow):
 
         return page
 
-    # ---------------------------------------------------------
-    # Logique d'enchaînement et de routage interne
-    # ---------------------------------------------------------
     def _open_route_details(self, route_data):
-        """Remplit l'interface stylisée de l'ancienne version avec les données injectées"""
         self.active_route_data = route_data
         self.breadcrumb.setText(f"   Manager  ›  Tournée {route_data['id']} ({route_data['driver']})")
         
-        # Remplissage des blocs colorés
         stats = route_data["stats"]
         orders = route_data["orders"]
         vols = sum(ORDERS_DB[o]["volume"] for o in orders)
@@ -465,7 +436,6 @@ class ManagerApp(QMainWindow):
         self.summary_labels["distance"].setText(stats["distance"])
         self.depart_label.setText(f"Départ à {stats['depart']} depuis {DEPOT['nom']}")
 
-        # Remplissage du tableau d'origine
         self.table.setRowCount(len(orders))
         for row, order_num in enumerate(orders):
             d = ORDERS_DB[order_num]
@@ -477,8 +447,6 @@ class ManagerApp(QMainWindow):
             self.table.item(row, 0).setData(Qt.UserRole, order_num)
 
         self.table.resizeRowsToContents()
-        
-        # Changement d'écran dynamique
         self.left_container.setCurrentIndex(1)
 
     def _close_details(self):
@@ -491,7 +459,6 @@ class ManagerApp(QMainWindow):
         row = selected[0].row()
         order_num = self.table.item(row, 0).data(Qt.UserRole)
         
-        # Recentrage dynamique sur la carte
         d = ORDERS_DB[order_num]
         root_obj = self.quick_map.rootObject()
         if root_obj:
