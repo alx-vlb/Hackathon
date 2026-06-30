@@ -1,39 +1,3 @@
-import sys
-import os
-import requests
-import colorsys
-
-from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QFrame, QToolButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QGridLayout, QScrollArea, QSplitter, QStackedWidget, 
-    QCheckBox, QPushButton, QAbstractItemView, QLineEdit
-)
-from PySide6.QtQuickWidgets import QQuickWidget
-
-# ===========================================================================
-# 1) Données brutes issues de l'Algorithme d'Optimisation (VRP)
-# ===========================================================================
-OPTIMIZED_COURSES = [
-    # --- TOURNEE 1 ---
-    [
-        {"id": "6A14837201FR", "adresse": "12 Rue de Rivoli, 75004 Paris", "date_commande": "24/06/2026", "date_limite": "30/06/2026", "volume": 3},
-        {"id": "6A14837203FR", "adresse": "18 Rue Mouffetard, 75005 Paris", "date_commande": "23/06/2026", "date_limite": "29/06/2026", "volume": 2},
-        {"id": "6A14837205FR", "adresse": "31 Rue Monge, 75005 Paris", "date_commande": "25/06/2026", "date_limite": "30/06/2026", "volume": 1},
-        {"id": "6A14837207FR", "adresse": "2 Place d'Italie, 75013 Paris", "date_commande": "24/06/2026", "date_limite": "29/06/2026", "volume": 2}
-    ],
-    # --- TOURNEE 2 ---
-    [
-        {"id": "6A14837202FR", "adresse": "5 Avenue des Gobelins, 75013 Paris", "date_commande": "25/06/2026", "date_limite": "29/06/2026", "volume": 1},
-        {"id": "6A14837206FR", "adresse": "60 Rue de la Glacière, 75013 Paris", "date_commande": "27/06/2026", "date_limite": "01/07/2026", "volume": 4}
-    ],
-    # --- TOURNEE 3 ---
-    [
-        {"id": "6A14837204FR", "adresse": "7 Boulevard Saint-Marcel, 75013 Paris", "date_commande": "26/06/2026", "date_limite": "01/07/2026", "volume": 5}
-    ]
-]
-
 DEPOT = {"nom": "Dépôt - Bercy", "lat": 48.8389, "lon": 2.3833}
 
 # Valeurs d'initialisation par défaut
