@@ -10,7 +10,7 @@ nb_client = infos[0]
 nb_jours = infos[1]
 nb_camions = infos[2]
 P_max_camion = infos[3]
-coordonnées = generer_coordonnees(nb_clients, delta=20)
+coordonnées = generer_coordonnees(nb_client, delta=20)
 mat = matrice_distance(coordonnées)
 li_client = coordonnées[1:] #Coordonnées des clients uniquement
 
@@ -18,7 +18,7 @@ Clients = {}
 Clients[0] = classes.Client(0, (0,0), [])
 Clients[(0,0)] = classes.Client(0, (0,0), [])
 
-for i in range(0, nb_clients):
+for i in range(0, nb_client):
     d = []
     for j in range(nb_jours):
         d.append(demande[j][i])
