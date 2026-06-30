@@ -2,6 +2,7 @@ import classes
 from donnees import lire_scenario, generer_coordonnees
 import math
 import numpy as np
+import requests
 
 infos, demande = lire_scenario("mines_tms_instances/A_D_E_0.txt")
 nb_clients = infos[0]
@@ -35,6 +36,19 @@ def matrice_distance(listcord): #Une liste de coordonnées des clients
             matrice[i,j] = round(distance,2)
     return matrice
 
+
+def matrice_dist_reel(coords): #coords est une liste de tuple (longitude,latitude) des clients
+    coord_str = ";".join(f"{lon},{lat}" for lon, lat in coords)
+    url = f"http://router.project-osrm.org/table/v1/driving/{coord_str}?annotations=distance"
+    try:
+        resp = requests.get(url, timeout=4)
+        data = resp.json()
+
+        # Matrice des distances en mètres
+        return data["distances"]
+    except:
+        print(f"Erreur OSRM")
+        
 mat = matrice_distance(coordonnées) #La matrice des distances complète
 
 def longueur(listcli): #listcli est une liste d'identifiants des clients qui commence et se termine par 0
@@ -59,3 +73,5 @@ def opti_cli(clients): #Une liste d'identifiants du groupe de client à optimise
                     clients_opti[i:j+1] = reversed(clients_opti[i:j+1])
                     changement = True   
     return clients_opti
+
+print(opti_cli([i for i in range(0,nb_clients+1)]))
