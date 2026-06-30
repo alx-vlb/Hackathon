@@ -1,22 +1,6 @@
 from donnees import lire_scenario , generer_coordonnees
 from space_subdivision import space_subdiv
 import sys
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("⚠️ Erreur : Tu as oublié d'indiquer le nom du fichier dans le terminal.")
-        print("Exemple : python script.py mon_fichier.txt")
-    else:
-        fichier_choisi = sys.argv[1]
-        infos, demande = lire_scenario(fichier_choisi)
-        nb_client = infos[0]
-        nb_camions = infos[2]
-        P_max_camion = infos[-1]
-        li_client = generer_coordonnees(nb_client, delta=20)[1:]
-        li_poids = demande[0]
-        zones = space_subdiv(li_client, P_max_camion, li_poids, nb_camions)       
-
-#affichage
 import matplotlib.pyplot as plt
 
 def afficher_zones(zones):
@@ -48,4 +32,17 @@ def afficher_zones(zones):
     plt.legend()
     plt.show()
 
-afficher_zones(zones)
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("⚠️ Erreur : Tu as oublié d'indiquer le nom du fichier dans le terminal.")
+        print("Exemple : python test.py mon_fichier.txt")
+    else:
+        fichier_choisi = sys.argv[1]
+        infos, demande = lire_scenario(fichier_choisi)
+        nb_client = infos[0]
+        nb_camions = infos[2]
+        P_max_camion = infos[-1]
+        li_client = generer_coordonnees(nb_client, delta=20)[1:]
+        li_poids = demande[0]
+        zones = space_subdiv(li_client, P_max_camion, li_poids, nb_camions)
+        afficher_zones(zones)
