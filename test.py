@@ -5,11 +5,12 @@ from space_subdivision import space_subdiv
 
 infos, demande = lire_scenario("mines_tms_instances/C_S_H_0.txt")
 nb_client = infos[0]
-li_client = generer_coordonnees(nb_client, delta=20 )[1:]
+nb_camions = infos[2]
 P_max_camion = infos[-1]
+li_client = generer_coordonnees(nb_client, delta=20)[1:]
 li_poids = demande[0]
 
-print(space_subdiv(li_client, P_max_camion, li_poids))
+print(space_subdiv(li_client, P_max_camion, li_poids, nb_camions))
 
 #affichage
 import matplotlib.pyplot as plt
@@ -43,5 +44,5 @@ def afficher_zones(zones):
     plt.legend()
     plt.show()
 
-zones = space_subdiv(li_client, P_max_camion, li_poids)
+zones = space_subdiv(li_client, P_max_camion, li_poids, nb_camions)
 print(afficher_zones(zones))
