@@ -21,13 +21,13 @@ for i in range(0, nb_clients):
     client = classes.Client(i+1, coordonnées[i+1], d)
     Clients[i+1] = client
 
-def matrice_distance(listcli): #Une liste d'identifiants des clients
-    n = len(listcli)
+def matrice_distance(listcord): #Une liste de coordonnées des clients
+    n = len(listcord)
     matrice = np.zeros((n,n))
     for i in range(n):
         for j in range(n):
-            x1, y1 = listcli[i]
-            x2, y2 = listcli[j]
+            x1, y1 = listcord[i]
+            x2, y2 = listcord[j]
             distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
             matrice[i,j] = round(distance,2)
     return matrice
@@ -56,5 +56,3 @@ def opti_cli(clients): #Une liste d'identifiants du groupe de client à optimise
                     clients_opti[i:j+1] = reversed(clients_opti[i:j+1])
                     changement = True   
     return clients_opti
-
-print(mat)
