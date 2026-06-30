@@ -6,8 +6,9 @@ def space_subdiv(li_clients, P_max_camion, li_poids, nb_camions):
     zones = [] 
     for i in range(len(li_clients)):
         zones.append([li_clients[i],1,li_poids[i],[li_clients[i]]]) 
+    stop=False
     nb_zone_exploded=0
-    while nb_zone_exploded<5 and len(zones)>nb_camions:
+    while not stop and len(zones)>nb_camions:
         mat_dist = matrice_distance([z[0] for z in zones])
         li_dist=[]
         for i in range(len(zones)):
@@ -29,9 +30,12 @@ def space_subdiv(li_clients, P_max_camion, li_poids, nb_camions):
                 zones.append(nv_zone)
             else:
                 i+=1
-        if fusion_found==False:
+        if not fusion_found and nb_zone_exploded>=100:
+            stop=True
+        if fusion_found==False and nb_zone_exploded<100 and not stop:
             zones = zone_exploded(zones, li_clients, li_poids)
             nb_zone_exploded+=1
+        
 
     return zones    #zones est une liste de zones, chaque zone est une liste contenant le centroïde, le nombre de clients, le poids total et la liste des clients
 
