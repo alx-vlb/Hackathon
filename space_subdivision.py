@@ -1,15 +1,14 @@
 
 from opti import matrice_distance
 from donnees import lire_scenario, generer_coordonnees
-import matplotlib.pyplot as plt
 
-def space_subdiv(li_clients, P_max_camion, li_poids):
+def space_subdiv(li_clients, P_max_camion, li_poids, nb_camions):
     zones = [] 
     for i in range(len(li_clients)):
         zones.append([li_clients[i],1,li_poids[i],[li_clients[i]]]) 
     fusion_possible=True
 
-    while fusion_possible:
+    while fusion_possible and len(zones)>nb_camions:
         mat_dist = matrice_distance([z[0] for z in zones])
         li_dist=[]
         for i in range(len(zones)):
