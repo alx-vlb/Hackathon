@@ -4,10 +4,13 @@ import sys
 import matplotlib.pyplot as plt
 
 def afficher_zones(zones):
-    plt.figure(figsize=(8, 8))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
+    remplissage = []
+    couleurs = []
     for i, zone in enumerate(zones):
         centroide = zone[0]
+        remplissage.append(zone[2])
         clients = zone[3]
 
         # coordonnées des clients
@@ -15,21 +18,44 @@ def afficher_zones(zones):
         y = [p[1] for p in clients]
 
         # clients de la zone
-        plt.scatter(x, y, label=f"Zone {i+1}")
+        s = ax1.scatter(x, y, label=f"Zone {i+1}")
+        couleurs.append(s.get_facecolor()[0]) 
 
         # centroïde (croix noire)
-        plt.scatter(centroide[0], centroide[1],
+        ax1.scatter(centroide[0], centroide[1],
                     marker="x", s=100, color="black")
-
+    print(remplissage)
     # dépôt
-    plt.scatter(0, 0, marker="s", s=120, color="red", label="Dépôt")
+    ax1.scatter(0, 0, marker="s", s=120, color="red", label="Dépôt")
 
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.title("Subdivision de l'espace")
-    plt.grid(True)
-    plt.axis("equal")
-    plt.legend()
+    ax1.set_xlabel("x")
+    ax1.set_ylabel("y")
+    ax1.set_title("Subdivision de l'espace")
+    ax1.grid(True)
+    ax1.axis("equal")
+    ax1.legend()
+
+    camions = [f"C{i+1}" for i in range(len(remplissage))]
+
+    bars = ax2.bar(camions, remplissage, color = couleurs)
+
+    ax2.set_xlabel("Camion")
+    ax2.set_ylabel("Chargement")
+    ax2.set_title("Chargement de chaque camion")
+    ax2.grid(axis="y")
+
+    # valeurs au-dessus des barres
+    for bar in bars:
+        height = bar.get_height()
+        ax2.text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            f"{height}",
+            ha="center",
+            va="bottom"
+        )
+
+    plt.tight_layout()
     plt.show()
 
 if __name__ == "__main__":
