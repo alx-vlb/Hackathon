@@ -12,7 +12,9 @@ coordonnées = generer_coordonnees(nb_clients, delta=20)
 epsilon = 0.1
 
 Clients = {}
-Clients[0] = classes.Client(0, (0,0), []) #Dépôt
+
+Clients[0] = classes.Client(0, (0,0), [])
+Clients[(0,0)] = classes.Client(0, (0,0), [])
 
 for i in range(0, nb_clients):
     d = []
@@ -20,6 +22,7 @@ for i in range(0, nb_clients):
         d.append(demande[j][i])
     client = classes.Client(i+1, coordonnées[i+1], d)
     Clients[i+1] = client
+    Clients[coordonnées[i+1]] = client
 
 def matrice_distance(listcord): #Une liste de coordonnées des clients
     n = len(listcord)
@@ -56,3 +59,5 @@ def opti_cli(clients): #Une liste d'identifiants du groupe de client à optimise
                     clients_opti[i:j+1] = reversed(clients_opti[i:j+1])
                     changement = True   
     return clients_opti
+
+print(Clients)
