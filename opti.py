@@ -26,13 +26,13 @@ def matrice_distance(listcli): #Une liste d'identifiants des clients
     matrice = np.zeros((n,n))
     for i in range(n):
         for j in range(n):
-            x1, y1 = Clients[listcli[i]].coordonnées
-            x2, y2 = Clients[listcli[j]].coordonnées
+            x1, y1 = listcli[i]
+            x2, y2 = listcli[j]
             distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
             matrice[i,j] = round(distance,2)
     return matrice
 
-mat = matrice_distance([i for i in range(0, nb_clients+1)]) #La matrice des distances complète
+mat = matrice_distance(coordonnées) #La matrice des distances complète
 
 def longueur(listcli): #listcli est une liste d'identifiants des clients qui commence et se termine par 0
     n = len(listcli)
@@ -56,3 +56,5 @@ def opti_cli(clients): #Une liste d'identifiants du groupe de client à optimise
                     clients_opti[i:j+1] = reversed(clients_opti[i:j+1])
                     changement = True   
     return clients_opti
+
+print(mat)
