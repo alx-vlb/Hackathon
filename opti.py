@@ -59,5 +59,3 @@ def opti_cli(clients): #Une liste d'identifiants du groupe de client à optimise
                     clients_opti[i:j+1] = reversed(clients_opti[i:j+1])
                     changement = True   
     return clients_opti
-
-print(Clients)
