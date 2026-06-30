@@ -1,29 +1,9 @@
 import classes
-from donnees import lire_scenario, generer_coordonnees
 import math
 import numpy as np
 import requests
 
-infos, demande = lire_scenario("mines_tms_instances/A_D_E_0.txt")
-nb_clients = infos[0]
-nb_jours = infos[1]
-nb_camions = infos[2]
-volume_max_camion = infos[3]
-coordonnées = generer_coordonnees(nb_clients, delta=20)
 epsilon = 0.1
-
-Clients = {}
-
-Clients[0] = classes.Client(0, (0,0), [])
-Clients[(0,0)] = classes.Client(0, (0,0), [])
-
-for i in range(0, nb_clients):
-    d = []
-    for j in range(nb_jours):
-        d.append(demande[j][i])
-    client = classes.Client(i+1, coordonnées[i+1], d)
-    Clients[i+1] = client
-    Clients[coordonnées[i+1]] = client
 
 def matrice_distance(listcord): #Une liste de coordonnées des clients
     n = len(listcord)
@@ -36,7 +16,6 @@ def matrice_distance(listcord): #Une liste de coordonnées des clients
             matrice[i,j] = round(distance,2)
     return matrice
 
-
 def matrice_dist_reel(coords): #coords est une liste de tuple (longitude,latitude) des clients
     coord_str = ";".join(f"{lon},{lat}" for lon, lat in coords)
     url = f"http://router.project-osrm.org/table/v1/driving/{coord_str}?annotations=distance"
@@ -48,8 +27,6 @@ def matrice_dist_reel(coords): #coords est une liste de tuple (longitude,latitud
         return data["distances"]
     except:
         print(f"Erreur OSRM")
-        
-mat = matrice_distance(coordonnées) #La matrice des distances complète
 
 def longueur(listcli): #listcli est une liste d'identifiants des clients qui commence et se termine par 0
     n = len(listcli)
@@ -58,7 +35,7 @@ def longueur(listcli): #listcli est une liste d'identifiants des clients qui com
         dist += mat[listcli[i],listcli[i+1]]
     return dist
 
-def opti_cli(clients): #Une liste d'identifiants du groupe de client à optimiser qui commence et se termine par 0
+def opti_cli(clients, mat): #Une liste d'identifiants du groupe de client à optimiser qui commence et se termine par 0
     n = len(clients)
     clients_opti = list(clients) 
     changement = True
@@ -71,7 +48,5 @@ def opti_cli(clients): #Une liste d'identifiants du groupe de client à optimise
                 if cout_futur + epsilon < cout_actuel:
                     # On inverse le segment entre i et j inclus
                     clients_opti[i:j+1] = reversed(clients_opti[i:j+1])
-                    changement = True   
+                    changement = True
     return clients_opti
-
-print(opti_cli([i for i in range(0,nb_clients+1)]))
