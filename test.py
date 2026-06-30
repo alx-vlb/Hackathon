@@ -5,22 +5,16 @@ import sys
 import matplotlib.pyplot as plt
 import classes 
 
-<<<<<<< HEAD
 def afficher_zones_et_trajets(zones, tous_les_trajets_coord):
     """
     Affiche les zones de clients ET dessine les trajets fléchés.
     tous_les_trajets_coord : liste de listes de coordonnées [(x1,y1), (x2,y2), ...]
     """
-    plt.figure(figsize=(9, 9))
-
     # 1. Affichage des clients et centroïdes par zone
-=======
-def afficher_zones(zones):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
     remplissage = []
     couleurs = []
->>>>>>> 16f44e17860f9f1bad1ecc66e31e0188cf5ff689
     for i, zone in enumerate(zones):
         centroide = zone[0]
         remplissage.append(zone[2])
@@ -29,15 +23,15 @@ def afficher_zones(zones):
         x = [p[0] for p in clients]
         y = [p[1] for p in clients]
 
-<<<<<<< HEAD
         # Clients de la zone
-        plt.scatter(x, y, label=f"Zone {i+1}", zorder=3)
+        s = ax1.scatter(x, y, label=f"Zone {i+1}")
+        couleurs.append(s.get_facecolor()[0]) 
 
         # Centroïde (croix noire)
-        plt.scatter(centroide[0], centroide[1], marker="x", s=100, color="black", zorder=4)
+        ax1.scatter(centroide[0], centroide[1], marker="x", s=100, color="black", zorder=4)
 
     # Dépôt (carré rouge)
-    plt.scatter(0, 0, marker="s", s=120, color="red", label="Dépôt", zorder=5)
+    ax1.scatter(0, 0, marker="s", s=120, color="red", label="Dépôt", zorder=5)
 
     # 2. AJOUT : Dessin des trajets fléchés pour chaque camion
     for trajet in tous_les_trajets_coord:
@@ -46,7 +40,7 @@ def afficher_zones(zones):
             pt_arrivee = trajet[k+1]
             
             # On dessine une flèche du point A vers le point B
-            plt.annotate(
+            ax1.annotate(
                 "", 
                 xy=pt_arrivee,          # Pointe de la flèche
                 xytext=pt_depart,       # Base de la flèche
@@ -58,27 +52,9 @@ def afficher_zones(zones):
                 )
             )
 
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.title("Subdivision de l'espace et Trajets Optimisés")
-    plt.grid(True)
-    plt.axis("equal")
-    plt.legend()
-=======
-        # clients de la zone
-        s = ax1.scatter(x, y, label=f"Zone {i+1}")
-        couleurs.append(s.get_facecolor()[0]) 
-
-        # centroïde (croix noire)
-        ax1.scatter(centroide[0], centroide[1],
-                    marker="x", s=100, color="black")
-    print(remplissage)
-    # dépôt
-    ax1.scatter(0, 0, marker="s", s=120, color="red", label="Dépôt")
-
     ax1.set_xlabel("x")
     ax1.set_ylabel("y")
-    ax1.set_title("Subdivision de l'espace")
+    ax1.set_title("Subdivision de l'espace et Trajets Optimisés")
     ax1.grid(True)
     ax1.axis("equal")
     ax1.legend()
@@ -104,7 +80,6 @@ def afficher_zones(zones):
         )
 
     plt.tight_layout()
->>>>>>> 16f44e17860f9f1bad1ecc66e31e0188cf5ff689
     plt.show()
 
 if __name__ == "__main__":
