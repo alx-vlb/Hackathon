@@ -17,13 +17,23 @@ coordonnees = generer_coordonnees(nb_client)
 # Matrice de distance globale sur toutes les coordonnées
 mat = matrice_distance(coordonnees)
 
+Clients = {}
+Clients[0] = classes.Client(0, (0,0), [])
+Clients[(0,0)] = classes.Client(0, (0,0), [])
+
+for i in range(0, nb_client):
+    d = []
+    client = classes.Client(i+1, coordonnees[i+1], d)
+    Clients[i+1] = client
+    Clients[coordonnees[i+1]] = client
+
 course = {}
 angle_depart = 0
 for jour in range(nb_jours):
 
     li_clients = []
     for i in range(nb_client):
-        li_clients.append(classes.Client(i, coordonnees[i + 1], demande[jour][i]))
+        li_clients.append(classes.Client(i+1, coordonnees[i + 1], demande[jour][i]))
 
     zones, angle_depart, no_delivered = angle_subdiv(list(range(nb_client)), li_clients, P_max_camion, nb_camions, angle_depart)
     course[jour + 1] = []
