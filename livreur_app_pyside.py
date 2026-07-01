@@ -13,8 +13,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtQuickWidgets import QQuickWidget
 
 # --- IMPORTATION DU MOTEUR DE CALCUL ---
-# Cela va exécuter main.py en arrière-plan et nous donner accès à ses variables
-import main
+# Cela va exécuter angle_main.py en arrière-plan et nous donner accès à ses variables
+import angle_main as main
 import donnees
 
 # Le Dépôt est forcé aux coordonnées de Paris pour l'affichage de la carte

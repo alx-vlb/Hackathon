@@ -4,7 +4,7 @@ from angle_subdivision import angle_subdiv
 import classes
 
 # Lecture du scénario
-infos, demande = lire_scenario("mines_tms_instances/C_S_H_3.txt")
+infos, demande = lire_scenario("mines_tms_instances/C_D_H_3.txt")
 
 nb_client = infos[0]
 nb_jours = infos[1]
@@ -18,11 +18,11 @@ coordonnees = generer_coordonnees(nb_client)
 mat = matrice_distance(coordonnees)
 
 Clients = {}
-Clients[0] = classes.Client(0, (0,0), [])
-Clients[(0,0)] = classes.Client(0, (0,0), [])
+Clients[0] = classes.Client(0, (0,0), [0]*nb_jours)
+Clients[(0,0)] = Clients[0]
 
 for i in range(0, nb_client):
-    d = []
+    d = [demande[j][i] for j in range(nb_jours)]
     client = classes.Client(i+1, coordonnees[i+1], d)
     Clients[i+1] = client
     Clients[coordonnees[i+1]] = client

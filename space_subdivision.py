@@ -1,4 +1,6 @@
 
+from statistics import variance
+
 from opti import matrice_distance
 from donnees import lire_scenario, generer_coordonnees
 
@@ -30,17 +32,21 @@ def space_subdiv(li_clients, P_max_camion, li_poids, nb_camions):
                 zones.append(nv_zone)
             else:
                 i+=1
-        if not fusion_found and nb_zone_exploded>=100:
+        if not fusion_found and nb_zone_exploded>=10:
             stop=True
-        if fusion_found==False and nb_zone_exploded<100 and not stop:
-            zones = zone_exploded(zones, li_clients, li_poids)
-            nb_zone_exploded+=1
+        if fusion_found==False and nb_zone_exploded<10 and not stop:
+            if nb_zone_exploded%10==0:
+                zones = spread_zone_exploded(zones, li_clients, li_poids)
+                nb_zone_exploded+=1
+            else:
+                zones = light_zone_exploded(zones, li_clients, li_poids)
+                nb_zone_exploded+=1
         
 
     return zones    #zones est une liste de zones, chaque zone est une liste contenant le centroïde, le nombre de clients, le poids total et la liste des clients
 
             
-def zone_exploded(zones, li_clients, li_poids):
+def light_zone_exploded(zones, li_clients, li_poids):
     poids_min=zones[0][2]
     ind_min=0
     new_zones=[]
@@ -53,4 +59,20 @@ def zone_exploded(zones, li_clients, li_poids):
             new_zones.append(zones[i])
     for i in range(len(zones[ind_min][3])):
         new_zones.append([zones[ind_min][3][i],1,li_poids[li_clients.index(zones[ind_min][3][i])],[zones[ind_min][3][i]]])
+    return new_zones
+
+def spread_zone_exploded(zones, li_clients, li_poids): #explose la zone qui a la plus grande variance géographique (calculer avec les coordonnées) pour éviter les zones trop étalées
+    var_max=0
+    ind_max=0
+    new_zones=[]
+    for i in range(len(zones)):
+        var=variance([li_clients.index(c) for c in zones[i][3]])
+        if var>var_max:
+            var_max=var
+            ind_max=i
+    for i in range(len(zones)):
+        if i!=ind_max:
+            new_zones.append(zones[i])
+    for i in range(len(zones[ind_max][3])):
+        new_zones.append([zones[ind_max][3][i],1,li_poids[li_clients.index(zones[ind_max][3][i])],[zones[ind_max][3][i]]])
     return new_zones
