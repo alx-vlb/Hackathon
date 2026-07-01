@@ -1,32 +1,31 @@
-DEPOT = {"nom": "Dépôt - Bercy", "lat": 48.8389, "lon": 2.3833}
+import sys
+import os
+import requests
+import colorsys
 
-# Valeurs d'initialisation par défaut
-META_DATES = ["Aujourd'hui - 29/06/2026", "Aujourd'hui - 29/06/2026", "Demain - 30/06/2026"]
-META_STATS = [
-    {"temps": "1h24", "distance": "12.4 km", "depart": "08:30"},
-    {"temps": "0h52", "distance": "8.1 km", "depart": "10:15"},
-    {"temps": "0h45", "distance": "6.8 km", "depart": "09:00"}
-]
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QFrame, QToolButton, QTableWidget, QTableWidgetItem,
+    QHeaderView, QGridLayout, QScrollArea, QSplitter, QStackedWidget, 
+    QCheckBox, QPushButton, QAbstractItemView, QLineEdit, QTabWidget
+)
+from PySide6.QtQuickWidgets import QQuickWidget
+
+# --- IMPORTATION DU MOTEUR DE CALCUL ---
+# Cela va exécuter main.py en arrière-plan et nous donner accès à ses variables
+import main
+import donnees
+
+# Le Dépôt est forcé aux coordonnées de Paris pour l'affichage de la carte
+DEPOT = {"nom": "Dépôt Central", "lat": 48.8566, "lon": 2.3522}
 
 # Thème UI
 BLUE_DARK, BLUE_PALE, INK, INK_SOFT, LINE, BG, PANEL_BG = "#1d4ed8", "#eaf1fd", "#1f2533", "#5b6472", "#e3e7ee", "#f5f7fa", "#ffffff"
 
 # ===========================================================================
-# 2) Fonctions Techniques
+# Fonctions Techniques
 # ===========================================================================
-
-def geocode_address(address_str):
-    url = "https://api-adresse.data.gouv.fr/search/"
-    params = {"q": address_str, "limit": 1}
-    try:
-        response = requests.get(url, params=params, timeout=5)
-        data = response.json()
-        if data["features"]:
-            lon, lat = data["features"][0]["geometry"]["coordinates"]
-            return lat, lon
-    except:
-        pass
-    return 48.8566, 2.3522
 
 def get_route_color(index):
     golden_ratio_conjugate = 0.618033988749895
@@ -44,7 +43,7 @@ def fetch_road_route(coords):
         return [{"lat": lat, "lon": lon} for lat, lon in coords]
 
 # ===========================================================================
-# 3) QML Code (Carte)
+# QML Code (Carte)
 # ===========================================================================
 
 QML_MAP_CODE = f"""import QtQuick
@@ -99,12 +98,12 @@ Rectangle {{
             }}
         }}
     }}
-    function centerOnStop(lat, lon) {{ mainMap.center = QtPositioning.coordinate(lat, lon); mainMap.zoomLevel = 16; }}
+    function centerOnStop(lat, lon) {{ mainMap.center = QtPositioning.coordinate(lat, lon); mainMap.zoomLevel = 15; }}
 }}
 """
 
 # ===========================================================================
-# 4) Composants Graphiques de l'interface
+# Composants Graphiques de l'interface
 # ===========================================================================
 
 class CollapsiblePanel(QWidget):
@@ -154,7 +153,7 @@ class RouteCard(QFrame):
         info_layout = QVBoxLayout()
         driver_display = route_data['driver'].strip() if route_data['driver'].strip() else "Non attribuée"
         
-        self.title = QLabel(f"Tournée {route_data['id']} - {driver_display}")
+        self.title = QLabel(f"{route_data['id']} - {driver_display}")
         self.title.setStyleSheet(f"font-weight: bold; color: {INK}; font-size: 13px; background: transparent;")
         
         self.subtitle = QLabel(f"Commandes : {len(route_data['orders'])}  .  Départ : {route_data['stats']['depart']}")
@@ -175,7 +174,7 @@ class RouteCard(QFrame):
 
     def update_driver_name_display(self, new_name):
         driver_display = new_name.strip() if new_name.strip() else "Non attribuée"
-        self.title.setText(f"Tournée {self.route_data['id']} - {driver_display}")
+        self.title.setText(f"{self.route_data['id']} - {driver_display}")
 
     def update_departure_display(self, new_depart):
         self.subtitle.setText(f"Commandes : {len(self.route_data['orders'])}  .  Départ : {new_depart}")
@@ -186,47 +185,36 @@ class RouteCard(QFrame):
         self.checkbox.blockSignals(False)
 
 # ===========================================================================
-# 5) Main Application Window
+# Main Application Window
 # ===========================================================================
 
 class ManagerApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Vue Globale Magasin - Pipeline Algorithmique Connecté")
+        self.setWindowTitle("Vue Globale Magasin - ERP Logistique")
         self.resize(1340, 840)
         self.setStyleSheet(f"QMainWindow {{ background: {BG}; }}")
 
         self.route_cards_references = {}
-        self.date_panels_references = {}
         self.active_route_id = None
-
+        
+        self.orders_db = {}
+        self.algo_output = []
         self.routes_model = {}
-        print("\n--- GÉOCODAGE & IMPORTATION DES TOURNÉES DE L'ALGO ---")
-        for idx, course_orders in enumerate(OPTIMIZED_COURSES):
-            print(f"Traitement de la Tournée {idx+1}...")
-            for order in course_orders:
-                lat, lon = geocode_address(order["adresse"])
-                order["lat"] = lat
-                order["lon"] = lon
 
-            r_id = f"T-{idx+1:03d}"
-            route_ui = {
-                "id": r_id,
-                "driver": "",  
-                "date": META_DATES[idx % len(META_DATES)],
-                "stats": META_STATS[idx % len(META_STATS)],
-                "color": get_route_color(idx),
-                "orders": course_orders,
-                "visible": False
-            }
-            self.routes_model[r_id] = route_ui
-        print("--- IMPORTATION RÉUSSIE ---\n")
+        # 1. Extraction et formatage des données depuis main.py
+        self._load_data_from_backend()
 
+        # 2. Construction du pont de données
+        self._build_routes_from_algo()
+
+        # 3. Fichier QML temporaire
         dossier_du_script = os.path.dirname(os.path.abspath(__file__))
         self.qml_filename = os.path.join(dossier_du_script, "map_manager.qml")
         with open(self.qml_filename, "w", encoding="utf-8") as f:
             f.write(QML_MAP_CODE)
 
+        # 4. Structure principale
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
@@ -234,6 +222,125 @@ class ManagerApp(QMainWindow):
         root.setSpacing(0)
         
         root.addWidget(self._build_topbar())
+
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet(f"""
+            QTabWidget::pane {{ border: none; border-top: 1px solid {LINE}; }}
+            QTabBar::tab {{ background: #e3e7ee; color: {INK_SOFT}; padding: 10px 20px; font-weight: bold; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; }}
+            QTabBar::tab:selected {{ background: {PANEL_BG}; color: {BLUE_DARK}; border: 1px solid {LINE}; border-bottom: none; }}
+        """)
+
+        self.tab_today = QWidget()
+        self._setup_today_tab()
+        
+        self.tab_future = QWidget()
+        self._setup_future_tab()
+
+        self.tabs.addTab(self.tab_today, "Tournées du Jour (J1)")
+        self.tabs.addTab(self.tab_future, "Commandes en attente (Futur)")
+        
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(10, 10, 10, 10)
+        body_layout.addWidget(self.tabs)
+        root.addWidget(body)
+
+        self._update_unassigned_counters()
+
+    def _load_data_from_backend(self):
+        """Traduit les objets métier de classes.py en dictionnaires d'interface"""
+        print("\n--- SYNCHRONISATION AVEC LE MOTEUR ALGORITHMIQUE ---")
+        
+        # A. Construction de la base de données globale
+        for cid, client in main.Clients.items():
+            if isinstance(cid, tuple) or cid == 0:
+                continue # On ignore les clés sous forme de tuple et le Dépôt (0)
+            
+            for jour_idx in range(main.nb_jours):
+                vol = client.demande[jour_idx]
+                if vol > 0: # S'il y a un colis prévu pour ce jour
+                    order_id = f"C-{cid}-J{jour_idx+1}"
+                    # Attribution d'une fausse rue pour l'esthétique
+                    rue = donnees.rues[cid % len(donnees.rues)] 
+                    
+                    lat, lon = client.coordonnées
+                    # Si l'algo utilise des coordonnées cartésiennes de test (-20 à 20), on les projette sur Paris
+                    if -100 < lat < 100 and -100 < lon < 100 and not (40 < lat < 55):
+                        lat = 48.8566 + (lat * 0.003)
+                        lon = 2.3522 + (lon * 0.003)
+                    
+                    self.orders_db[order_id] = {
+                        "adresse": f"{rue}, 75000 Paris",
+                        "date_commande": f"Jour {max(1, jour_idx)}",
+                        "date_limite": f"Jour {jour_idx+1}",
+                        "volume": vol,
+                        "lat": lat,
+                        "lon": lon,
+                        "jour": jour_idx + 1
+                    }
+        
+        # B. Récupération des tournées calculées pour le Jour 1
+        if 1 in main.course:
+            for trajet in main.course[1]:
+                camion_commandes = []
+                for cid in trajet:
+                    if cid != 0: # On ignore le passage au dépôt (0)
+                        order_id = f"C-{cid}-J1"
+                        if order_id in self.orders_db:
+                            camion_commandes.append(order_id)
+                
+                # S'il y a des clients dans ce camion, on sauvegarde la tournée
+                if camion_commandes:
+                    self.algo_output.append(camion_commandes)
+
+    def _build_routes_from_algo(self):
+        """Transforme l'ALGO_OUTPUT (liste d'IDs) en données complètes pour l'UI"""
+        for idx, client_ids in enumerate(self.algo_output):
+            truck_name = f"Camion N°{idx+1}"
+            
+            course_orders = []
+            for order_id in client_ids:
+                if order_id in self.orders_db:
+                    order_data = self.orders_db[order_id].copy()
+                    order_data["id"] = order_id
+                    course_orders.append(order_data)
+
+            route_ui = {
+                "id": truck_name,
+                "driver": "",  
+                "date": "Jour 1", 
+                "stats": {
+                    "temps": "Non calculé", 
+                    "distance": "Non calculée",
+                    "depart": "08:30"
+                },
+                "color": get_route_color(idx),
+                "orders": course_orders,
+                "visible": False
+            }
+            self.routes_model[truck_name] = route_ui
+        print("--- INTERFACE PRÊTE ---\n")
+
+    def _build_topbar(self):
+        bar = QFrame()
+        bar.setFixedHeight(52)
+        bar.setStyleSheet(f"background:{PANEL_BG}; border-bottom:1px solid {LINE};")
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(18, 0, 18, 0)
+        brand = QLabel("Flux Marchandises")
+        brand.setStyleSheet(f"color:{BLUE_DARK}; font-weight:700; font-size:14px;")
+        layout.addWidget(brand)
+        layout.addStretch()
+        return bar
+
+    # ===========================================================================
+    # GESTION ONGLET 1 : PLANIFICATION DU JOUR
+    # ===========================================================================
+
+    def _setup_today_tab(self):
+        layout = QVBoxLayout(self.tab_today)
+        layout.setContentsMargins(0, 10, 0, 0)
+        
         splitter = QSplitter(Qt.Horizontal)
         splitter.setStyleSheet("QSplitter::handle { background: transparent; }")
         
@@ -259,28 +366,7 @@ class ManagerApp(QMainWindow):
         splitter.addWidget(self.map_frame)
         splitter.setSizes([460, 880])
         
-        body = QWidget()
-        body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(10, 10, 10, 10)
-        body_layout.addWidget(splitter)
-        root.addWidget(body)
-
-        self._update_unassigned_counters()
-
-    def _build_topbar(self):
-        bar = QFrame()
-        bar.setFixedHeight(52)
-        bar.setStyleSheet(f"background:{PANEL_BG}; border-bottom:1px solid {LINE};")
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(18, 0, 18, 0)
-        brand = QLabel("Flux Marchandises")
-        brand.setStyleSheet(f"color:{BLUE_DARK}; font-weight:700; font-size:14px;")
-        self.breadcrumb = QLabel("   Manager  >  Tournées Algorithmiques Optimisées")
-        self.breadcrumb.setStyleSheet(f"color:{INK_SOFT}; font-size:12px;")
-        layout.addWidget(brand)
-        layout.addWidget(self.breadcrumb)
-        layout.addStretch()
-        return bar
+        layout.addWidget(splitter)
 
     def _build_dispatch_page(self):
         scroll = QScrollArea()
@@ -293,40 +379,29 @@ class ManagerApp(QMainWindow):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 8, 0)
 
-        grouped = {}
-        for r_id, r_data in self.routes_model.items(): 
-            grouped.setdefault(r_data["date"], []).append(r_data)
-
-        for date_label, routes_list in grouped.items():
-            panel = CollapsiblePanel(date_label, start_open=True)
-            self.date_panels_references[date_label] = panel
-            
-            for r_data in routes_list:
-                card = RouteCard(r_data)
-                card.on_visibility_toggled.connect(self._toggle_route_on_map)
-                card.on_details_requested.connect(self._open_route_details)
-                
-                self.route_cards_references[r_data["id"]] = card
-                panel.content_layout.addWidget(card)
-            layout.addWidget(panel)
+        self.panel_today = CollapsiblePanel("Tournées du jour", start_open=True)
         
+        for r_id, r_data in self.routes_model.items(): 
+            card = RouteCard(r_data)
+            card.on_visibility_toggled.connect(self._toggle_route_on_map)
+            card.on_details_requested.connect(self._open_route_details)
+            
+            self.route_cards_references[r_data["id"]] = card
+            self.panel_today.content_layout.addWidget(card)
+            
+        layout.addWidget(self.panel_today)
         layout.addStretch()
         scroll.setWidget(content)
         return scroll
 
     def _update_unassigned_counters(self):
-        counters = {date: 0 for date in self.date_panels_references.keys()}
-        for r_id, r_data in self.routes_model.items():
-            if not r_data["driver"].strip():
-                counters[r_data["date"]] += 1
-                
-        for date_label, panel in self.date_panels_references.items():
-            unassigned_count = counters[date_label]
-            if unassigned_count > 0:
-                s = "s" if unassigned_count > 1 else ""
-                panel.toggle_btn.setText(f"  {date_label} ({unassigned_count} tournée{s} non attribuée{s})")
-            else:
-                panel.toggle_btn.setText(f"  {date_label} (Toutes les tournées sont attribuées)")
+        unassigned_count = sum(1 for r in self.routes_model.values() if not r["driver"].strip())
+        
+        if unassigned_count > 0:
+            s = "s" if unassigned_count > 1 else ""
+            self.panel_today.toggle_btn.setText(f"  Tournées du Jour 1 ({unassigned_count} tournée{s} non attribuée{s})")
+        else:
+            self.panel_today.toggle_btn.setText(f"  Tournées du Jour 1 (Toutes les tournées sont attribuées)")
 
     def _toggle_route_on_map(self, route_id, is_visible):
         route_data = self.routes_model[route_id]
@@ -350,7 +425,8 @@ class ManagerApp(QMainWindow):
                 coords.append((order["lat"], order["lon"]))
                 markers.append({"lat": order["lat"], "lon": order["lon"], "label": str(i+1)})
             
-            path = fetch_road_route(coords)
+            # Pour éviter les ralentissements réseau, on appelle OSRM que s'il y a peu de points, sinon ligne droite
+            path = fetch_road_route(coords) if len(coords) < 15 else [{"lat": lat, "lon": lon} for lat, lon in coords]
             root_obj.toggleRoute(route_data["id"], route_data["color"], path, markers, True)
         else:
             root_obj.toggleRoute(route_data["id"], "", [], [], False)
@@ -368,85 +444,47 @@ class ManagerApp(QMainWindow):
         btn_back.clicked.connect(self._close_details)
         layout.addWidget(btn_back)
 
-        # Panneau de Configuration de la Tournée
         assignment_frame = QFrame()
         assignment_frame.setStyleSheet(f"background: #fafbfc; border: 1px solid {LINE}; border-radius: 8px;")
         assignment_layout = QVBoxLayout(assignment_frame)
         assignment_layout.setContentsMargins(12, 12, 12, 12)
         assignment_layout.setSpacing(10)
         
-        # 1. Gestion du Livreur
+        self.truck_label = QLabel("Camion N°—")
+        self.truck_label.setStyleSheet(f"color: {INK}; font-size: 14px; font-weight: bold; background: transparent; padding-bottom: 5px;")
+        assignment_layout.addWidget(self.truck_label)
+
         driver_row = QHBoxLayout()
         input_label = QLabel("Livreur attitré :")
         input_label.setStyleSheet(f"font-weight: 600; color: {INK}; font-size: 12px; background: transparent;")
         self.driver_input = QLineEdit()
-        self.driver_input.setPlaceholderText("Entrez le nom ou l'ID du chauffeur...")
-        self.driver_input.setStyleSheet(f"QLineEdit {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 6px; padding: 6px 10px; font-size: 12px; color: {INK}; }} QLineEdit:focus {{ border-color: {BLUE_DARK}; }}")
+        self.driver_input.setPlaceholderText("Entrez le nom du chauffeur...")
+        self.driver_input.setStyleSheet(f"QLineEdit {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 6px; padding: 6px 10px; font-size: 12px; color: {INK}; }}")
         self.driver_input.textEdited.connect(self._on_driver_name_edited)
         self.driver_input.returnPressed.connect(self._close_details) 
         driver_row.addWidget(input_label)
         driver_row.addWidget(self.driver_input, 1)
         assignment_layout.addLayout(driver_row)
 
-        # 2. Information du Camion (Fixe / Lecture seule)
-        truck_row = QHBoxLayout()
-        truck_title_label = QLabel("Véhicule chargé :")
-        truck_title_label.setStyleSheet(f"font-weight: 600; color: {INK}; font-size: 12px; background: transparent;")
-        self.truck_label = QLabel("Camion N°—")
-        self.truck_label.setStyleSheet(f"color: {INK}; font-size: 12px; font-weight: bold; background: transparent;")
-        truck_row.addWidget(truck_title_label)
-        truck_row.addWidget(self.truck_label, 1)
-        assignment_layout.addLayout(truck_row)
-
-        # 3. Modification de l'heure de départ
         depart_row = QHBoxLayout()
         depart_input_label = QLabel("Heure de départ :")
         depart_input_label.setStyleSheet(f"font-weight: 600; color: {INK}; font-size: 12px; background: transparent;")
         self.depart_input = QLineEdit()
         self.depart_input.setPlaceholderText("HH:MM")
-        self.depart_input.setStyleSheet(f"QLineEdit {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 6px; padding: 6px 10px; font-size: 12px; color: {INK}; }} QLineEdit:focus {{ border-color: {BLUE_DARK}; }}")
+        self.depart_input.setStyleSheet(f"QLineEdit {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 6px; padding: 6px 10px; font-size: 12px; color: {INK}; }}")
         self.depart_input.textEdited.connect(self._on_departure_time_edited)
         depart_row.addWidget(depart_input_label)
         depart_row.addWidget(self.depart_input, 1)
         assignment_layout.addLayout(depart_row)
 
-        # 4. Affichage Carte
         self.detail_map_checkbox = QCheckBox("Afficher le trajet sur la carte")
         self.detail_map_checkbox.toggled.connect(self._on_detail_checkbox_toggled)
         assignment_layout.addWidget(self.detail_map_checkbox)
 
         layout.addWidget(assignment_frame)
 
-        # Résumé des indicateurs de performance de la tournée
-        self.panel_summary = CollapsiblePanel("Résumé de la tournée sélectionnée")
-        grid = QGridLayout()
-        grid.setSpacing(8)
-        self.panel_summary.content_layout.addLayout(grid)
-
-        self.summary_labels = {}
-        items = [("temps", "Temps estimé"), ("stops", "Stops"), ("volume", "Volume total"), ("distance", "Distance")]
-        for i, (key, label) in enumerate(items):
-            cell = QFrame()
-            cell.setStyleSheet(f"background:{BLUE_PALE}; border-radius:8px;")
-            cell_layout = QVBoxLayout(cell)
-            cell_layout.setContentsMargins(10, 8, 10, 8)
-            value_lbl = QLabel("—")
-            value_lbl.setStyleSheet(f"color:{BLUE_DARK}; font-size:17px; font-weight:700; background:transparent;")
-            label_lbl = QLabel(label)
-            label_lbl.setStyleSheet(f"color:{INK_SOFT}; font-size:10.5px; background:transparent;")
-            cell_layout.addWidget(value_lbl)
-            cell_layout.addWidget(label_lbl)
-            grid.addWidget(cell, i // 2, i % 2)
-            self.summary_labels[key] = value_lbl
-
-        self.depart_label = QLabel("")
-        self.depart_label.setStyleSheet(f"color:{INK_SOFT}; font-size:11.5px; margin-top:4px; background: transparent;")
-        self.panel_summary.content_layout.addWidget(self.depart_label)
-        layout.addWidget(self.panel_summary)
-
-        # Tableau des Commandes / Séquencement
-        self.panel_orders = CollapsiblePanel("Ordre de passage optimisé (Séquence)")
-        columns = ["Étape", "N° commande", "Adresse", "Vol.", "Date commande", "Date Limite"]
+        self.panel_orders = CollapsiblePanel("Ordre de passage optimisé")
+        columns = ["Étape", "N° commande", "Adresse", "Vol.", "Date limite"]
         self.table = QTableWidget(0, len(columns))
         self.table.setHorizontalHeaderLabels(columns)
         self.table.verticalHeader().setVisible(False)
@@ -454,12 +492,11 @@ class ManagerApp(QMainWindow):
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setShowGrid(False)
-        self.table.setMinimumHeight(320)
-        self.table.setWordWrap(True)
+        self.table.setMinimumHeight(400)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(2, QHeaderView.Stretch)
-        for col in (0, 1, 3, 4, 5): header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
+        for col in (0, 1, 3, 4): header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
 
         self.table.setStyleSheet(f"""
             QTableWidget {{ border: none; font-size: 11px; background: {PANEL_BG}; color: {INK}; }}
@@ -477,19 +514,8 @@ class ManagerApp(QMainWindow):
         route_data = self.routes_model[route_id]
         self.active_route_id = route_id
         
-        driver_text = route_data['driver'].strip() if route_data['driver'].strip() else "Non attribuée"
-        self.breadcrumb.setText(f"   Manager  >  Tournée {route_data['id']} ({driver_text})")
-        
         self.driver_input.setText(route_data["driver"])
-        
-        # Identification du camion d'après l'index de la tournée (T-001 -> Camion N°1)
-        try:
-            truck_num = int(route_id.split("-")[1])
-        except ValueError:
-            truck_num = 1
-        self.truck_label.setText(f"Camion N°{truck_num}")
-
-        # Remplissage du champ éditable de l'heure de départ
+        self.truck_label.setText(route_data["id"])
         self.depart_input.setText(route_data["stats"]["depart"])
         
         self.detail_map_checkbox.blockSignals(True)
@@ -501,19 +527,10 @@ class ManagerApp(QMainWindow):
         """)
         self.detail_map_checkbox.blockSignals(False)
         
-        stats = route_data["stats"]
         orders = route_data["orders"]
-        vols = sum(o["volume"] for o in orders)
-        
-        self.summary_labels["temps"].setText(stats["temps"])
-        self.summary_labels["stops"].setText(str(len(orders)))
-        self.summary_labels["volume"].setText(str(vols))
-        self.summary_labels["distance"].setText(stats["distance"])
-        self.depart_label.setText(f"Départ à {stats['depart']} depuis {DEPOT['nom']}")
-
         self.table.setRowCount(len(orders))
         for row, order in enumerate(orders):
-            values = [str(row + 1), order["id"], order["adresse"], str(order["volume"]), order["date_commande"], order["date_limite"]]
+            values = [str(row + 1), order["id"], order["adresse"], str(order["volume"]), order["date_limite"]]
             for col, val in enumerate(values):
                 item = QTableWidgetItem(val)
                 if col == 0: item.setTextAlignment(Qt.AlignCenter)
@@ -526,25 +543,13 @@ class ManagerApp(QMainWindow):
     def _on_driver_name_edited(self, new_text):
         if self.active_route_id and self.active_route_id in self.routes_model:
             self.routes_model[self.active_route_id]["driver"] = new_text
-            
-            driver_text = new_text.strip() if new_text.strip() else "Non attribuée"
-            self.breadcrumb.setText(f"   Manager  >  Tournée {self.active_route_id} ({driver_text})")
-            
             if self.active_route_id in self.route_cards_references:
                 self.route_cards_references[self.active_route_id].update_driver_name_display(new_text)
-
             self._update_unassigned_counters()
 
     def _on_departure_time_edited(self, new_time):
-        """Met à jour l'heure de départ de la tournée de façon synchronisée partout dans l'UI"""
         if self.active_route_id and self.active_route_id in self.routes_model:
-            # 1. Sauvegarde dans le modèle de données interne
             self.routes_model[self.active_route_id]["stats"]["depart"] = new_time
-            
-            # 2. Rafraîchissement des textes de la vue détail courante
-            self.depart_label.setText(f"Départ à {new_time} depuis {DEPOT['nom']}")
-            
-            # 3. Répercussion sur le composant (Card) du tableau de bord d'accueil
             if self.active_route_id in self.route_cards_references:
                 self.route_cards_references[self.active_route_id].update_departure_display(new_time)
 
@@ -554,7 +559,6 @@ class ManagerApp(QMainWindow):
 
     def _close_details(self):
         self.active_route_id = None
-        self.breadcrumb.setText("   Manager  >  Tournées Algorithmiques Optimisées")
         self.left_container.setCurrentIndex(0)
 
     def _on_row_selected(self):
@@ -566,6 +570,56 @@ class ManagerApp(QMainWindow):
         root_obj = self.quick_map.rootObject()
         if root_obj and order:
             root_obj.centerOnStop(order["lat"], order["lon"])
+
+    # ===========================================================================
+    # GESTION ONGLET 2 : COMMANDES FUTURES
+    # ===========================================================================
+    
+    def _setup_future_tab(self):
+        layout = QVBoxLayout(self.tab_future)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        title = QLabel("Base de données des commandes en attente (Non traitées par l'algorithme du Jour 1)")
+        title.setStyleSheet(f"font-weight: bold; color: {INK}; font-size: 14px; padding-bottom: 10px;")
+        layout.addWidget(title)
+
+        # Identification des commandes déjà assignées aujourd'hui
+        assigned_order_ids = set()
+        for truck_orders in self.algo_output:
+            assigned_order_ids.update(truck_orders)
+
+        # Filtrage des commandes futures (celles qui ne sont pas dans les camions d'aujourd'hui)
+        future_orders = [
+            (c_id, data) for c_id, data in self.orders_db.items() if c_id not in assigned_order_ids
+        ]
+
+        columns = ["N° commande", "Adresse", "Vol.", "Date Limite"]
+        table_future = QTableWidget(len(future_orders), len(columns))
+        table_future.setHorizontalHeaderLabels(columns)
+        table_future.verticalHeader().setVisible(False)
+        table_future.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        table_future.setSelectionBehavior(QAbstractItemView.SelectRows)
+        table_future.setShowGrid(False)
+
+        header = table_future.horizontalHeader()
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        for col in (0, 2, 3): header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
+
+        table_future.setStyleSheet(f"""
+            QTableWidget {{ border: 1px solid {LINE}; font-size: 12px; background: {PANEL_BG}; color: {INK}; border-radius: 8px; }}
+            QHeaderView::section {{ background: #fafbfc; color: {INK_SOFT}; font-size: 11px; font-weight: 600; padding: 10px; border: none; border-bottom: 1px solid {LINE}; }}
+            QTableWidget::item {{ padding: 10px; border-bottom: 1px solid #f0f0f0; }}
+            QTableWidget::item:selected {{ background: {BLUE_PALE}; color: {INK}; }}
+        """)
+
+        for row, (c_id, data) in enumerate(future_orders):
+            values = [c_id, data["adresse"], str(data["volume"]), data["date_limite"]]
+            for col, val in enumerate(values):
+                item = QTableWidgetItem(val)
+                if col == 2: item.setTextAlignment(Qt.AlignCenter)
+                table_future.setItem(row, col, item)
+
+        layout.addWidget(table_future)
 
     def closeEvent(self, event):
         if os.path.exists(self.qml_filename): os.remove(self.qml_filename)
