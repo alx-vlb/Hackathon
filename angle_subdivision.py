@@ -15,7 +15,7 @@ def angle_subdiv(cli_id, Clients, P_max_camion, nb_camions, angle_init): #cli_id
     zones = []
     for id in cli_id:
         (x,y) = Clients[id].coordonnées
-        if (x,y) != (0,0):
+        if (x,y) != (0,0) and Clients[id].demande > 0:
             coor_pol.append([angle(x,y,angle_init),id])
     coor_pol.sort(key=lambda x: x[0])
     cli_zone = []
