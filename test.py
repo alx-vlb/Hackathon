@@ -1,4 +1,4 @@
-from donnees import lire_scenario, generer_coordonnees
+from donnees import lire_scenario, generer_coordonnees, generer_coordonnees_gps
 from space_subdivision import space_subdiv
 from opti import matrice_distance, opti_cli
 import sys
@@ -31,7 +31,7 @@ def afficher_zones_et_trajets(zones, tous_les_trajets_coord):
         ax1.scatter(centroide[0], centroide[1], marker="x", s=100, color="black", zorder=4)
 
     # Dépôt (carré rouge)
-    ax1.scatter(0, 0, marker="s", s=120, color="red", label="Dépôt", zorder=5)
+    ax1.scatter(48.8566,2.3522 , marker="s", s=120, color="red", label="Dépôt", zorder=5)
 
     # 2. AJOUT : Dessin des trajets fléchés pour chaque camion
     for trajet in tous_les_trajets_coord:
@@ -93,15 +93,15 @@ if __name__ == "__main__":
         nb_jours = infos[1]
         nb_camions = infos[2]
         P_max_camion = infos[3]
-        coordonnées = generer_coordonnees(nb_client, delta=20)
+        coordonnées = generer_coordonnees_gps(nb_client)
         mat = matrice_distance(coordonnées)
         cli_coord = coordonnées[1:]
         cli_poids = demande[0] #Demandes du premier jour
         zones = space_subdiv(cli_coord, P_max_camion, cli_poids, nb_camions)
 
         Clients = {}
-        Clients[0] = classes.Client(0, (0,0), [])
-        Clients[(0,0)] = classes.Client(0, (0,0), [])
+        Clients[0] = classes.Client(0, (48.8566,2.3522), [])
+        Clients[(48.8566,2.3522)] = classes.Client(0, (48.8566,2.3522), [])
         for i in range(0, nb_client):
             d = []
             for j in range(nb_jours):
