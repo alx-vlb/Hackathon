@@ -198,15 +198,3 @@ rues = [
     "Place de la République",
     "Place de la Nation"
 ]
-
-def generer_adresse_aléatoire():
-    numero = random.randint(1, 250)
-    rue = random.choice(rues)
-    return f"{numero} {rue}, Paris"
-
-#test
-'''for _ in range(5):
-    adresse = generer_adresse_aléatoire()
-    geolocator = Nominatim(user_agent="projet_livraison")
-    location = geolocator.geocode(adresse)
-    print((location.latitude,location.longitude))'''
