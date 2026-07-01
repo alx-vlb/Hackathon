@@ -3,7 +3,7 @@ import math
 import numpy as np
 import requests
 
-epsilon = 0.1
+epsilon = 0
 
 def matrice_distance(listcord): #Une liste de coordonnées des clients
     n = len(listcord)

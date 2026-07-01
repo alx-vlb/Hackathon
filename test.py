@@ -4,6 +4,7 @@ from opti import matrice_distance, opti_cli
 import sys
 import matplotlib.pyplot as plt
 import classes 
+from angle_subdivision import angle_subdiv
 
 def afficher_zones_et_trajets(zones, tous_les_trajets_coord, Clients):
     """
@@ -88,7 +89,7 @@ if __name__ == "__main__":
         nb_jours = infos[1]
         nb_camions = infos[2]
         P_max_camion = infos[3]
-        coordonnées = generer_coordonnees_gps(nb_client)
+        coordonnées = generer_coordonnees(nb_client)
         mat = matrice_distance(coordonnées)
 
         Clients = {}
