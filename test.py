@@ -5,70 +5,65 @@ import sys
 import matplotlib.pyplot as plt
 import classes 
 
-def afficher_zones_et_trajets(zones, tous_les_trajets_coord):
+def afficher_zones_et_trajets(zones, tous_les_trajets_coord, Clients):
     """
-    Affiche les zones de clients ET dessine les trajets fléchés.
-    tous_les_trajets_coord : liste de listes de coordonnées [(x1,y1), (x2,y2), ...]
+    Affiche les zones de clients ET dessine les trajets fléchés (sans centroïdes).
     """
-    # 1. Affichage des clients et centroïdes par zone
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
     remplissage = []
     couleurs = []
+    
     for i, zone in enumerate(zones):
-        centroide = zone[0]
-        remplissage.append(zone[2])
-        clients = zone[3]
+        id_clients = zone[0]
+        remplissage.append(zone[1]) # Chargement du camion
 
-        x = [p[0] for p in clients]
-        y = [p[1] for p in clients]
+        # Extraction des coordonnées des clients de la zone via le dictionnaire Clients
+        x = [Clients[id_cli].coordonnées[0] for id_cli in id_clients]
+        y = [Clients[id_cli].coordonnées[1] for id_cli in id_clients]
 
-        # Clients de la zone
-        s = ax1.scatter(x, y, label=f"Zone {i+1}")
+        # Affichage des clients de la zone
+        s = ax1.scatter(x, y, label=f"Zone {i+1}", zorder=3)
         couleurs.append(s.get_facecolor()[0]) 
 
-        # Centroïde (croix noire)
-        ax1.scatter(centroide[0], centroide[1], marker="x", s=100, color="black", zorder=4)
+    # Dépôt central (carré rouge)
+    ax1.scatter(0, 0, marker="s", s=120, color="red", label="Dépôt", zorder=5)
 
-    # Dépôt (carré rouge)
-    ax1.scatter(48.8566,2.3522 , marker="s", s=120, color="red", label="Dépôt", zorder=5)
-
-    # 2. AJOUT : Dessin des trajets fléchés pour chaque camion
+    # 2. Dessin des trajets fléchés pour chaque camion
     for trajet in tous_les_trajets_coord:
         for k in range(len(trajet) - 1):
             pt_depart = trajet[k]
             pt_arrivee = trajet[k+1]
             
-            # On dessine une flèche du point A vers le point B
             ax1.annotate(
                 "", 
-                xy=pt_arrivee,          # Pointe de la flèche
-                xytext=pt_depart,       # Base de la flèche
+                xy=pt_arrivee,          
+                xytext=pt_depart,       
                 arrowprops=dict(
-                    arrowstyle="->",    # Style de flèche simple
-                    lw=1.5,             # Épaisseur de la ligne
-                    color="gray",       # Couleur des flèches (tu peux la changer)
-                    ls="--"             # Ligne en pointillés pour ne pas surcharger le graphe
+                    arrowstyle="->",    
+                    lw=1.5,             
+                    color="gray",       
+                    ls="--"             
                 )
             )
 
     ax1.set_xlabel("x")
     ax1.set_ylabel("y")
-    ax1.set_title("Subdivision de l'espace et Trajets Optimisés")
+    ax1.set_title("Subdivision angulaire et Trajets Optimisés")
     ax1.grid(True)
     ax1.axis("equal")
     ax1.legend()
 
+    # 3. Graphique à barres pour le chargement
     camions = [f"C{i+1}" for i in range(len(remplissage))]
-
-    bars = ax2.bar(camions, remplissage, color = couleurs)
+    bars = ax2.bar(camions, remplissage, color=couleurs)
 
     ax2.set_xlabel("Camion")
     ax2.set_ylabel("Chargement")
     ax2.set_title("Chargement de chaque camion")
     ax2.grid(axis="y")
 
-    # valeurs au-dessus des barres
+    # Valeurs au-dessus des barres
     for bar in bars:
         height = bar.get_height()
         ax2.text(
@@ -95,26 +90,23 @@ if __name__ == "__main__":
         P_max_camion = infos[3]
         coordonnées = generer_coordonnees_gps(nb_client)
         mat = matrice_distance(coordonnées)
-        cli_coord = coordonnées[1:]
-        cli_poids = demande[0] #Demandes du premier jour
-        zones = space_subdiv(cli_coord, P_max_camion, cli_poids, nb_camions)
 
         Clients = {}
-        Clients[0] = classes.Client(0, (48.8566,2.3522), [])
-        Clients[(48.8566,2.3522)] = classes.Client(0, (48.8566,2.3522), [])
+        Clients[0] = classes.Client(0, (0,0), 0)
+        Clients[(0,0)] = classes.Client(0, (0,0), 0)
         for i in range(0, nb_client):
-            d = []
-            for j in range(nb_jours):
-                d.append(demande[j][i])
+            d = demande[0][i]
             client = classes.Client(i+1, coordonnées[i+1], d)
             Clients[i+1] = client
             Clients[coordonnées[i+1]] = client
 
+        zones, angle_final, non_livré = angle_subdiv([i for i in range(nb_client+1)], Clients, P_max_camion, nb_camions, 0)
+        print(angle_final)
+        print(non_livré)
+
         tous_les_trajets = []
         for zone in zones:
-            coord_clients = zone[3]
-            id_clients = [Clients[coord].id_client for coord in coord_clients]
-            trajet = [0] + id_clients + [0]
+            trajet = [0] + zone[0] + [0]
             trajet_opt = opti_cli(trajet, mat)
             
             # On récupère la liste des coordonnées correspondantes
@@ -124,4 +116,4 @@ if __name__ == "__main__":
             tous_les_trajets.append(coord_opt)
             
         # On passe les zones ET les listes de coordonnées à la fonction graphique
-        afficher_zones_et_trajets(zones, tous_les_trajets)
+        afficher_zones_et_trajets(zones, tous_les_trajets, Clients)
