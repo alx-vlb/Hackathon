@@ -426,7 +426,7 @@ class ManagerApp(QMainWindow):
                 markers.append({"lat": order["lat"], "lon": order["lon"], "label": str(i+1)})
             
             # Pour éviter les ralentissements réseau, on appelle OSRM que s'il y a peu de points, sinon ligne droite
-            path = fetch_road_route(coords) if len(coords) < 15 else [{"lat": lat, "lon": lon} for lat, lon in coords]
+            path = fetch_road_route(coords) if len(coords) < 30 else [{"lat": lat, "lon": lon} for lat, lon in coords]
             root_obj.toggleRoute(route_data["id"], route_data["color"], path, markers, True)
         else:
             root_obj.toggleRoute(route_data["id"], "", [], [], False)
