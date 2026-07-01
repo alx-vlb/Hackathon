@@ -12,52 +12,20 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtQuickWidgets import QQuickWidget
 
-# ===========================================================================
-# 1) Base de données globale (Toutes les commandes existantes)
-# ===========================================================================
-ORDERS_DB = {
-    # --- Commandes traitées "Aujourd'hui" par l'algo ---
-    "C-1001": {"adresse": "12 Rue de Rivoli, 75004 Paris", "date_commande": "24/06/2026", "date_limite": "30/06/2026", "volume": 3},
-    "C-1002": {"adresse": "18 Rue Mouffetard, 75005 Paris", "date_commande": "23/06/2026", "date_limite": "29/06/2026", "volume": 2},
-    "C-1003": {"adresse": "31 Rue Monge, 75005 Paris", "date_commande": "25/06/2026", "date_limite": "30/06/2026", "volume": 1},
-    "C-1004": {"adresse": "5 Avenue des Gobelins, 75013 Paris", "date_commande": "25/06/2026", "date_limite": "29/06/2026", "volume": 1},
-    "C-1005": {"adresse": "60 Rue de la Glacière, 75013 Paris", "date_commande": "27/06/2026", "date_limite": "01/07/2026", "volume": 4},
-    # --- Commandes futures (Non sélectionnées par l'algo aujourd'hui) ---
-    "C-2001": {"adresse": "14 Rue de la Paix, 75002 Paris", "date_commande": "28/06/2026", "date_limite": "02/07/2026", "volume": 2},
-    "C-2002": {"adresse": "45 Rue de l'Opéra, 75001 Paris", "date_commande": "28/06/2026", "date_limite": "02/07/2026", "volume": 3},
-    "C-2003": {"adresse": "85 Boulevard Saint-Germain, 75006 Paris", "date_commande": "29/06/2026", "date_limite": "03/07/2026", "volume": 4}
-}
+# --- IMPORTATION DU MOTEUR DE CALCUL ---
+# Cela va exécuter main.py en arrière-plan et nous donner accès à ses variables
+import main
+import donnees
 
-# ===========================================================================
-# 2) Sortie de l'algorithme "space_subdiv" pour la journée en cours
-#    Format : Liste de listes (Chaque sous-liste = 1 Camion)
-# ===========================================================================
-ALGO_OUTPUT = [
-    ["C-1001", "C-1002", "C-1003"], # Camion N°1
-    ["C-1004", "C-1005"]            # Camion N°2
-]
-
-DEPOT = {"nom": "Dépôt - Bercy", "lat": 48.8389, "lon": 2.3833}
+# Le Dépôt est forcé aux coordonnées de Paris pour l'affichage de la carte
+DEPOT = {"nom": "Dépôt Central", "lat": 48.8566, "lon": 2.3522}
 
 # Thème UI
 BLUE_DARK, BLUE_PALE, INK, INK_SOFT, LINE, BG, PANEL_BG = "#1d4ed8", "#eaf1fd", "#1f2533", "#5b6472", "#e3e7ee", "#f5f7fa", "#ffffff"
 
 # ===========================================================================
-# 3) Fonctions Techniques
+# Fonctions Techniques
 # ===========================================================================
-
-def geocode_address(address_str):
-    url = "https://api-adresse.data.gouv.fr/search/"
-    params = {"q": address_str, "limit": 1}
-    try:
-        response = requests.get(url, params=params, timeout=5)
-        data = response.json()
-        if data["features"]:
-            lon, lat = data["features"][0]["geometry"]["coordinates"]
-            return lat, lon
-    except:
-        pass
-    return 48.8566, 2.3522
 
 def get_route_color(index):
     golden_ratio_conjugate = 0.618033988749895
@@ -75,7 +43,7 @@ def fetch_road_route(coords):
         return [{"lat": lat, "lon": lon} for lat, lon in coords]
 
 # ===========================================================================
-# 4) QML Code (Carte)
+# QML Code (Carte)
 # ===========================================================================
 
 QML_MAP_CODE = f"""import QtQuick
@@ -135,7 +103,7 @@ Rectangle {{
 """
 
 # ===========================================================================
-# 5) Composants Graphiques de l'interface
+# Composants Graphiques de l'interface
 # ===========================================================================
 
 class CollapsiblePanel(QWidget):
@@ -185,7 +153,6 @@ class RouteCard(QFrame):
         info_layout = QVBoxLayout()
         driver_display = route_data['driver'].strip() if route_data['driver'].strip() else "Non attribuée"
         
-        # Affichage direct du numéro de camion
         self.title = QLabel(f"{route_data['id']} - {driver_display}")
         self.title.setStyleSheet(f"font-weight: bold; color: {INK}; font-size: 13px; background: transparent;")
         
@@ -218,7 +185,7 @@ class RouteCard(QFrame):
         self.checkbox.blockSignals(False)
 
 # ===========================================================================
-# 6) Main Application Window
+# Main Application Window
 # ===========================================================================
 
 class ManagerApp(QMainWindow):
@@ -230,18 +197,24 @@ class ManagerApp(QMainWindow):
 
         self.route_cards_references = {}
         self.active_route_id = None
+        
+        self.orders_db = {}
+        self.algo_output = []
         self.routes_model = {}
 
-        # 1. Construction du pont de données
+        # 1. Extraction et formatage des données depuis main.py
+        self._load_data_from_backend()
+
+        # 2. Construction du pont de données
         self._build_routes_from_algo()
 
-        # 2. Fichier QML temporaire
+        # 3. Fichier QML temporaire
         dossier_du_script = os.path.dirname(os.path.abspath(__file__))
         self.qml_filename = os.path.join(dossier_du_script, "map_manager.qml")
         with open(self.qml_filename, "w", encoding="utf-8") as f:
             f.write(QML_MAP_CODE)
 
-        # 3. Structure principale
+        # 4. Structure principale
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
@@ -250,7 +223,6 @@ class ManagerApp(QMainWindow):
         
         root.addWidget(self._build_topbar())
 
-        # Création du système d'onglets
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet(f"""
             QTabWidget::pane {{ border: none; border-top: 1px solid {LINE}; }}
@@ -258,16 +230,14 @@ class ManagerApp(QMainWindow):
             QTabBar::tab:selected {{ background: {PANEL_BG}; color: {BLUE_DARK}; border: 1px solid {LINE}; border-bottom: none; }}
         """)
 
-        # Onglet 1 : Planification du Jour (Interface cartographique)
         self.tab_today = QWidget()
         self._setup_today_tab()
         
-        # Onglet 2 : Commandes en attente (Tableau de bord futur)
         self.tab_future = QWidget()
         self._setup_future_tab()
 
-        self.tabs.addTab(self.tab_today, "Tournées du Jour")
-        self.tabs.addTab(self.tab_future, "Commandes en attente")
+        self.tabs.addTab(self.tab_today, "Tournées du Jour (J1)")
+        self.tabs.addTab(self.tab_future, "Commandes en attente (Futur)")
         
         body = QWidget()
         body_layout = QVBoxLayout(body)
@@ -277,33 +247,71 @@ class ManagerApp(QMainWindow):
 
         self._update_unassigned_counters()
 
+    def _load_data_from_backend(self):
+        """Traduit les objets métier de classes.py en dictionnaires d'interface"""
+        print("\n--- SYNCHRONISATION AVEC LE MOTEUR ALGORITHMIQUE ---")
+        
+        # A. Construction de la base de données globale
+        for cid, client in main.Clients.items():
+            if isinstance(cid, tuple) or cid == 0:
+                continue # On ignore les clés sous forme de tuple et le Dépôt (0)
+            
+            for jour_idx in range(main.nb_jours):
+                vol = client.demande[jour_idx]
+                if vol > 0: # S'il y a un colis prévu pour ce jour
+                    order_id = f"C-{cid}-J{jour_idx+1}"
+                    # Attribution d'une fausse rue pour l'esthétique
+                    rue = donnees.rues[cid % len(donnees.rues)] 
+                    
+                    lat, lon = client.coordonnées
+                    # Si l'algo utilise des coordonnées cartésiennes de test (-20 à 20), on les projette sur Paris
+                    if -100 < lat < 100 and -100 < lon < 100 and not (40 < lat < 55):
+                        lat = 48.8566 + (lat * 0.003)
+                        lon = 2.3522 + (lon * 0.003)
+                    
+                    self.orders_db[order_id] = {
+                        "adresse": f"{rue}, 75000 Paris",
+                        "date_commande": f"Jour {max(1, jour_idx)}",
+                        "date_limite": f"Jour {jour_idx+1}",
+                        "volume": vol,
+                        "lat": lat,
+                        "lon": lon,
+                        "jour": jour_idx + 1
+                    }
+        
+        # B. Récupération des tournées calculées pour le Jour 1
+        if 1 in main.course:
+            for trajet in main.course[1]:
+                camion_commandes = []
+                for cid in trajet:
+                    if cid != 0: # On ignore le passage au dépôt (0)
+                        order_id = f"C-{cid}-J1"
+                        if order_id in self.orders_db:
+                            camion_commandes.append(order_id)
+                
+                # S'il y a des clients dans ce camion, on sauvegarde la tournée
+                if camion_commandes:
+                    self.algo_output.append(camion_commandes)
+
     def _build_routes_from_algo(self):
-        """Fonction Pont : Transforme les listes d'ID de l'algo en données exploitables par l'interface"""
-        print("\n--- GÉOCODAGE & CRÉATION DES TOURNÉES DU JOUR ---")
-        for idx, client_ids in enumerate(ALGO_OUTPUT):
+        """Transforme l'ALGO_OUTPUT (liste d'IDs) en données complètes pour l'UI"""
+        for idx, client_ids in enumerate(self.algo_output):
             truck_name = f"Camion N°{idx+1}"
-            print(f"Traitement du {truck_name}...")
             
             course_orders = []
-            for cid in client_ids:
-                if cid in ORDERS_DB:
-                    # Copie des données de la base pour ne pas l'altérer
-                    order_data = ORDERS_DB[cid].copy()
-                    order_data["id"] = cid
-                    
-                    # Géocodage
-                    lat, lon = geocode_address(order_data["adresse"])
-                    order_data["lat"] = lat
-                    order_data["lon"] = lon
-                    
+            for order_id in client_ids:
+                if order_id in self.orders_db:
+                    order_data = self.orders_db[order_id].copy()
+                    order_data["id"] = order_id
                     course_orders.append(order_data)
 
             route_ui = {
                 "id": truck_name,
                 "driver": "",  
+                "date": "Jour 1", 
                 "stats": {
-                    "temps": "Calcul en cours...", # Ces données pourraient être fournies par l'algo
-                    "distance": "Calcul en cours...",
+                    "temps": "Non calculé", 
+                    "distance": "Non calculée",
                     "depart": "08:30"
                 },
                 "color": get_route_color(idx),
@@ -311,7 +319,7 @@ class ManagerApp(QMainWindow):
                 "visible": False
             }
             self.routes_model[truck_name] = route_ui
-        print("--- IMPORTATION RÉUSSIE ---\n")
+        print("--- INTERFACE PRÊTE ---\n")
 
     def _build_topbar(self):
         bar = QFrame()
@@ -391,9 +399,9 @@ class ManagerApp(QMainWindow):
         
         if unassigned_count > 0:
             s = "s" if unassigned_count > 1 else ""
-            self.panel_today.toggle_btn.setText(f"  Tournées du jour ({unassigned_count} tournée{s} non attribuée{s})")
+            self.panel_today.toggle_btn.setText(f"  Tournées du Jour 1 ({unassigned_count} tournée{s} non attribuée{s})")
         else:
-            self.panel_today.toggle_btn.setText(f"  Tournées du jour (Toutes les tournées sont attribuées)")
+            self.panel_today.toggle_btn.setText(f"  Tournées du Jour 1 (Toutes les tournées sont attribuées)")
 
     def _toggle_route_on_map(self, route_id, is_visible):
         route_data = self.routes_model[route_id]
@@ -417,7 +425,8 @@ class ManagerApp(QMainWindow):
                 coords.append((order["lat"], order["lon"]))
                 markers.append({"lat": order["lat"], "lon": order["lon"], "label": str(i+1)})
             
-            path = fetch_road_route(coords)
+            # Pour éviter les ralentissements réseau, on appelle OSRM que s'il y a peu de points, sinon ligne droite
+            path = fetch_road_route(coords) if len(coords) < 15 else [{"lat": lat, "lon": lon} for lat, lon in coords]
             root_obj.toggleRoute(route_data["id"], route_data["color"], path, markers, True)
         else:
             root_obj.toggleRoute(route_data["id"], "", [], [], False)
@@ -570,21 +579,21 @@ class ManagerApp(QMainWindow):
         layout = QVBoxLayout(self.tab_future)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        title = QLabel("Base de données des commandes en attente (Non traitées par l'algorithme du jour)")
+        title = QLabel("Base de données des commandes en attente (Non traitées par l'algorithme du Jour 1)")
         title.setStyleSheet(f"font-weight: bold; color: {INK}; font-size: 14px; padding-bottom: 10px;")
         layout.addWidget(title)
 
         # Identification des commandes déjà assignées aujourd'hui
         assigned_order_ids = set()
-        for truck in ALGO_OUTPUT:
-            assigned_order_ids.update(truck)
+        for truck_orders in self.algo_output:
+            assigned_order_ids.update(truck_orders)
 
-        # Filtrage des commandes futures
+        # Filtrage des commandes futures (celles qui ne sont pas dans les camions d'aujourd'hui)
         future_orders = [
-            (c_id, data) for c_id, data in ORDERS_DB.items() if c_id not in assigned_order_ids
+            (c_id, data) for c_id, data in self.orders_db.items() if c_id not in assigned_order_ids
         ]
 
-        columns = ["N° commande", "Adresse", "Vol.", "Date commande", "Date Limite"]
+        columns = ["N° commande", "Adresse", "Vol.", "Date Limite"]
         table_future = QTableWidget(len(future_orders), len(columns))
         table_future.setHorizontalHeaderLabels(columns)
         table_future.verticalHeader().setVisible(False)
@@ -594,7 +603,7 @@ class ManagerApp(QMainWindow):
 
         header = table_future.horizontalHeader()
         header.setSectionResizeMode(1, QHeaderView.Stretch)
-        for col in (0, 2, 3, 4): header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
+        for col in (0, 2, 3): header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
 
         table_future.setStyleSheet(f"""
             QTableWidget {{ border: 1px solid {LINE}; font-size: 12px; background: {PANEL_BG}; color: {INK}; border-radius: 8px; }}
@@ -604,7 +613,7 @@ class ManagerApp(QMainWindow):
         """)
 
         for row, (c_id, data) in enumerate(future_orders):
-            values = [c_id, data["adresse"], str(data["volume"]), data["date_commande"], data["date_limite"]]
+            values = [c_id, data["adresse"], str(data["volume"]), data["date_limite"]]
             for col, val in enumerate(values):
                 item = QTableWidgetItem(val)
                 if col == 2: item.setTextAlignment(Qt.AlignCenter)
