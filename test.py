@@ -104,8 +104,6 @@ if __name__ == "__main__":
         Clients[(0,0)] = classes.Client(0, (0,0), [])
         for i in range(0, nb_client):
             d = []
-            for j in range(nb_jours):
-                d.append(demande[j][i])
             client = classes.Client(i+1, coordonnées[i+1], d)
             Clients[i+1] = client
             Clients[coordonnées[i+1]] = client
