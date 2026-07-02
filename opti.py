@@ -3,7 +3,7 @@ import math
 import numpy as np
 import requests
 
-epsilon = 0.1
+epsilon = 0
 
 def matrice_distance(listcord): #Une liste de coordonnées des clients
     n = len(listcord)
@@ -28,7 +28,7 @@ def matrice_dist_reel(coords): #coords est une liste de tuple (longitude,latitud
     except:
         print(f"Erreur OSRM")
 
-def longueur(listcli): #listcli est une liste d'identifiants des clients qui commence et se termine par 0
+def longueur(listcli,mat): #listcli est une liste d'identifiants des clients qui commence et se termine par 0
     n = len(listcli)
     dist = 0
     for i in range(n-1):
