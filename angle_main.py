@@ -1,5 +1,5 @@
-from opti import matrice_distance, opti_cli
-from donnees import lire_scenario, generer_coordonnees
+from opti import matrice_distance,matrice_dist_reel, opti_cli
+from donnees import lire_scenario, generer_coordonnees, generer_coordonnees_gps
 from angle_subdivision import angle_subdiv
 import classes
 

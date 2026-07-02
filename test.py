@@ -28,7 +28,7 @@ def afficher_zones_et_trajets(zones, tous_les_trajets_coord, Clients):
         couleurs.append(s.get_facecolor()[0]) 
 
     # Dépôt central (carré rouge)
-    ax1.scatter(0, 0, marker="s", s=120, color="red", label="Dépôt", zorder=5)
+    ax1.scatter(Clients[0].coordonnées[0], Clients[0].coordonnées[1], marker="s", s=120, color="red", label="Dépôt", zorder=5)
 
     # 2. Dessin des trajets fléchés pour chaque camion
     for trajet in tous_les_trajets_coord:
@@ -93,8 +93,8 @@ if __name__ == "__main__":
         mat = matrice_distance(coordonnées)
 
         Clients = {}
-        Clients[0] = classes.Client(0, (0,0), 0)
-        Clients[(0,0)] = classes.Client(0, (0,0), 0)
+        Clients[0] = classes.Client(0, (0, 0), 0)
+        #Clients[(48.8566, 2.3522)] = classes.Client(0, (48.8566, 2.3522), 0)
         for i in range(0, nb_client):
             d = demande[0][i]
             client = classes.Client(i+1, coordonnées[i+1], d)

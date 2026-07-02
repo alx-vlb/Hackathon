@@ -79,12 +79,12 @@ print(distance(a,b))'''
 
 def generer_coordonnees_gps(nb_clients):    
 
-    depot = (48.8566, 2.3522)  # Paris
+    depot = (48.8566, 2.3522)  # Paris (c'est l'hotel de ville)
     coordonnees = [depot]
 
     for _ in range(nb_clients):
-        lat = depot[0] + random.uniform(-0.1, 0.1)
-        lon = depot[1] + random.uniform(-0.1, 0.1)
+        lat = depot[0] + random.uniform(-0.06, 0.06)
+        lon = depot[1] + random.uniform(-0.06, 0.06)
         coordonnees.append((lat, lon))
 
     return coordonnees
