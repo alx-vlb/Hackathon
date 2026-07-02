@@ -53,12 +53,6 @@ def generer_coordonnees(nb_clients, delta=20):
 
     return coordonnees
 
-#Test
-'''infos, demande = lire_scenario("mines_tms_instances/A_D_E_4.txt")
-nb_clients = infos[0]
-coordonnees = generer_coordonnees(nb_clients)
-print(coordonnees)'''
-
 #Calcul de la distance entre 2 points 
 
 def distance(a,b):
@@ -70,9 +64,6 @@ def distance(a,b):
  d = np.sqrt((x1-x2)**2 + (y1-y2)**2)
  return d
  
-'''a = coordonnees[0]
-b = coordonnees[1]
-print(distance(a,b))'''
 
 
 #generation de coordonnées GPS autour de Paris
@@ -89,9 +80,6 @@ def generer_coordonnees_gps(nb_clients):
 
     return coordonnees
 
-#Test
-'''nb_clients = infos[0]
-print(generer_coordonnees_gps(nb_clients))'''
 
 
 #generer adresses aleatoires puis conversion en coordonnées GPS
