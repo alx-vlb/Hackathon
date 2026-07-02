@@ -12,35 +12,42 @@ from PySide6.QtWidgets import (
     QSizePolicy
 )
 from PySide6.QtQuickWidgets import QQuickWidget
-
-# --- IMPORTATION DU MOTEUR DE CALCUL ---
 import angle_main as main
 import donnees
 
-# Le Dépôt est forcé aux coordonnées de Paris pour l'affichage de la carte
+# On place le dépôt à ses vraie coordonnées dans Paris
 DEPOT = {"nom": "Dépôt Central", "lat": 48.8566, "lon": 2.3522}
 
-# Thème UI
-BLUE_DARK, BLUE_PALE, INK, INK_SOFT, LINE, BG, PANEL_BG = "#1d4ed8", "#eaf1fd", "#1f2533", "#5b6472", "#e3e7ee", "#f5f7fa", "#ffffff"
+# Thème de l'interface
+BLUE_DARK, BLUE_PALE, INK, INK_SOFT, LINE, BG, PANEL_BG = "#0f691e", "#eaf1fd", "#1f2533", "#5b6472", "#e3e7ee", "#f5f7fa", "#ffffff"
 
-# Fonctions Techniques
+# Fonctions utiles
 
 def get_route_color(day_idx, truck_idx):
-    """Génère une couleur unique basée sur le jour et le numéro de camion"""
-    hue = ((day_idx * 0.22) + (truck_idx * 0.15)) % 1.0
-    return '#{:02x}{:02x}{:02x}'.format(*(int(c*255) for c in colorsys.hsv_to_rgb(hue, 0.85, 0.90)))
+    #On cherche à Génèrer une couleur unique avec une dispersion maximale pour les camions
+    # On attribue une plage fixe de 10 index par jour.
+    slot_index = (day_idx * 12) + truck_idx/2
+    
+    # On utilise le nombre d'or pour tourner sur le spectre chromatique sans retomber sur une couleur déjà utilisée
+    hue = (slot_index * 0.618033988749895) % 1.0
+    
+    # Conversion en Hexadécimal RGB (Saturé à 80% et Luminosité à 70% pour être lisible mais avec un style un peu sobre et professionnel)
+    return '#{:02x}{:02x}{:02x}'.format(*(int(c*255) for c in colorsys.hsv_to_rgb(hue, 0.80, 0.70)))
 
+
+#Tracé des routes
 def fetch_road_route(coords):
-    coord_str = ";".join(f"{lon},{lat}" for lat, lon in coords)
-    url = f"https://router.project-osrm.org/route/v1/driving/{coord_str}?overview=full&geometries=geojson"
-    try:
-        resp = requests.get(url, timeout=4)
-        geometry = resp.json()["routes"][0]["geometry"]["coordinates"]
-        return [{"lat": lat, "lon": lon} for lon, lat in geometry]
-    except:
-        return [{"lat": lat, "lon": lon} for lat, lon in coords]
 
-# QML Code (Carte)
+    coord_str = ";".join(f"{lon},{lat}" for lat, lon in coords) #On adapte le format des coordonnées pour l'API d'OSRM
+    url = f"https://router.project-osrm.org/route/v1/driving/{coord_str}?overview=full&geometries=geojson" #On prépare la requête qu'on envoie à au serveurs publics d'OSRM pour avoir le tracé complet des routes pour des camions
+    try:
+        resp = requests.get(url, timeout=4) #On envoie la requête en imposant un timeout de 4 secondes pour éviter que le programme se bloque indéfiniment en cas de conflit
+        geometry = resp.json()["routes"][0]["geometry"]["coordinates"] #La réponse est au format json on l'extrait donc sous la forme d'une liste
+        return [{"lat": lat, "lon": lon} for lon, lat in geometry] #On met enfin tout sous la forme d'une liste de dictionnaire, c'est le format adapté au code QML de la carte
+    except:
+        return [{"lat": lat, "lon": lon} for lat, lon in coords] #Si l'utilisateur ne peut pas communiquer avec les serveur d'OSRM, on affiche simplement les points reliés par des lignes droites
+
+# Code QML de la carte
 
 QML_MAP_CODE = f"""import QtQuick
 import QtLocation
@@ -98,62 +105,67 @@ Rectangle {{
 }}
 """
 
+# Ne maîtrisant pas assez le Java Script, nous avons fait appel à un agent IA pour générer le code QML de la carte 
+
 # Composants Graphiques de l'interface
 
-class CollapsiblePanel(QWidget):
+class CollapsiblePanel(QWidget): #on créé une classe "Menu déroulant" car il n'y en a pas parmis les composants de base de Qt
     def __init__(self, title, start_open=True, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        outer = QVBoxLayout(self)
+        self.setAttribute(Qt.WA_StyledBackground, True) #On force Qt à appliquer le code CSS à notre attribut car il ne le fait pas par défault 
+        
+
+        
+        outer = QVBoxLayout(self) #self va empiler les éléments de façon verticale
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         
-        self.toggle_btn = QToolButton()
-        self.toggle_btn.setText(f"  {title}")
-        self.toggle_btn.setCheckable(True)
-        self.toggle_btn.setChecked(start_open)
-        self.toggle_btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        self.toggle_btn.setArrowType(Qt.DownArrow if start_open else Qt.RightArrow)
+        self.toggle_btn = QPushButton() #rends l'entête cliquable
+        self.toggle_btn.setText(title)
+        self.toggle_btn.setCheckable(True) #transforme le bouton en interrupteur on/off
+        self.toggle_btn.setChecked(start_open) #définit l'état initial de l'interrupteur
         
-        # FIX : Force le bouton à prendre toute la largeur disponible de manière fluide
-        self.toggle_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.toggle_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed) #Le bouton s'ettire sur toute la largeur de la fenêtre de façon à ce que celle-ci soit ajustable
         self.toggle_btn.setStyleSheet(f"""
-            QToolButton {{ 
+            QPushButton {{ 
                 background: #fafbfc; 
                 border: none; 
                 border-bottom: 1px solid {LINE}; 
                 border-top-left-radius: 7px;
-                border-top-right-radius: 7px;
-                padding: 12px 10px; 
+                border-top-right-radius: 7px;         
+                padding: 12px 15px; 
                 font-weight: 600; 
                 font-size: 13px; 
                 color: {INK}; 
                 text-align: left; 
             }}
-            QToolButton:hover {{
+            QPushButton:hover {{
                 background: #f0f2f5;
             }}
-        """)
-        self.toggle_btn.clicked.connect(self._toggle)
+        """) # Code CSS pour le designe du bouton
+        self.toggle_btn.clicked.connect(self._toggle) #Cliquer sur le bouton actionne la fonction _toggle
         
-        self.content = QWidget()
-        self.content.setStyleSheet(f"background: {PANEL_BG}; border-bottom-left-radius: 7px; border-bottom-right-radius: 7px;")
-        self.content_layout = QVBoxLayout(self.content)
-        self.content_layout.setContentsMargins(12, 12, 12, 12)
-        self.content.setVisible(start_open)
+        self.content = QWidget() #on créé le "tiroir" dans lequel on mettra les informations de notre menu déroulant
+        self.content.setStyleSheet(f"background: {PANEL_BG}; border-bottom-left-radius: 7px; border-bottom-right-radius: 7px;") #oon arrondit les angles du bas
+        self.content_layout = QVBoxLayout(self.content) #On définit un layout propre au tiroir pour pouvoir organiser les éléments qu'il contient
+        self.content_layout.setContentsMargins(12, 12, 12, 12) #ajout d'un padding
+        self.content.setVisible(start_open) #Le tiroir sera visible ou non au démarrage en fonction de la valeur de start_open
         
+        #On empile nos éléments verticalement dans outer
         outer.addWidget(self.toggle_btn)
         outer.addWidget(self.content)
+
+        #On créé une bordure autour de self de façon à pouvoir empile tout les boutons "jours" élégamment.
         self.setStyleSheet(f"CollapsiblePanel {{ background: {PANEL_BG}; border: 1px solid {LINE}; border-radius: 8px; margin-bottom: 12px; }}")
 
-    def _toggle(self):
+    def _toggle(self): #permet d'afficher/masquer les menus déroulants.
+        
         opened = self.toggle_btn.isChecked()
         self.content.setVisible(opened)
-        self.toggle_btn.setArrowType(Qt.DownArrow if opened else Qt.RightArrow)
 
 class RouteCard(QFrame):
-    on_details_requested = Signal(str)
-    on_visibility_toggled = Signal(str, bool)
+    on_details_requested = Signal(str) #Émettra un str lorsque l'utilisateur cliquera sur voir détails
+    on_visibility_toggled = Signal(str, bool) #Émets aussi un booléen 
 
     def __init__(self, route_data):
         super().__init__()
