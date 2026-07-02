@@ -4,7 +4,8 @@ from angle_subdivision import angle_subdiv
 import classes
 
 # Lecture du scénario
-infos, demande = lire_scenario("mines_tms_instances/C_D_H_3.txt")
+scenario = input("Quel scénario voulez-vous charger (ex :C_S_H_1 ) ? ")
+infos, demande = lire_scenario("mines_tms_instances/" + scenario + ".txt")
 
 nb_client = infos[0]
 nb_jours = infos[1]

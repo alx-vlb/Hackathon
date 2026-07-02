@@ -80,7 +80,7 @@ def afficher_zones_et_trajets(zones, tous_les_trajets_coord, Clients):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("⚠️ Erreur : Tu as oublié d'indiquer le nom du fichier dans le terminal.")
+        print("Erreur : Tu as oublié d'indiquer le nom du fichier dans le terminal.")
         print("Exemple : python test.py mon_fichier.txt")
     else:
         fichier_choisi = sys.argv[1]
