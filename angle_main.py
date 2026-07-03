@@ -17,6 +17,7 @@ coordonnees = generer_coordonnees(nb_client)
 # Matrice de distance globale sur toutes les coordonnées
 mat = matrice_distance(coordonnees)
 
+#On crée les clients et on les stocke dans un dictionnaire pour un accès rapide par id ou par coordonnées
 Clients = {}
 Clients[0] = classes.Client(0, (0,0), [0]*nb_jours)
 Clients[(0,0)] = Clients[0]
@@ -29,15 +30,20 @@ for i in range(0, nb_client):
 
 course = {}
 angle_depart = 0
+
+# Boucle sur les jours pour à la fin proposer un plan de livraison pour chaque jour avec gestion de l'ajout au jour suivant si nécessaire
 for jour in range(nb_jours):
 
     li_clients = []
+    # On crée la liste des clients pour le jour courant
     for i in range(nb_client):
         li_clients.append(classes.Client(i+1, coordonnees[i + 1], demande[jour][i]))
 
+    # On appelle la fonction angle_subdiv pour obtenir les zones de livraison, l'angle de départ pour le prochain jour et les clients non livrés
     zones, angle_depart, no_delivered = angle_subdiv(list(range(nb_client)), li_clients, P_max_camion, nb_camions, angle_depart)
     course[jour + 1] = []
 
+    # On parcourt les zones pour créer les trajets optimisés pour chaque zone   
     for zone in zones:
         # zone[0] = liste des indices clients (0..N-1)
         if not zone[0]:  # zone vide, pas de camion affecté

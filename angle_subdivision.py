@@ -22,21 +22,27 @@ def angle_subdiv(cli_id, Clients, P_max_camion, nb_camions, angle_init): #cli_id
     camion_act = 0 
     chargement = 0 #Chargement de la zone en cours
     nb_cli = 0 #Nombre de clients dans la zone en cours
+    #On parcourt les clients triés par angle et on les affecte aux camions jusqu'à ce que le nombre de camions soit atteint ou que tous les clients soient affectés
     while camion_act < nb_camions:
+        #On affecte les clients à la zone tant que le chargement ne dépasse pas la capacité du camion
         if coor_pol != [] and chargement + Clients[coor_pol[0][1]].demande < P_max_camion:
             cli_zone.append(coor_pol[0][1])
             chargement += Clients[coor_pol[0][1]].demande
             nb_cli += 1
             del coor_pol[0]
+        #Si le chargement dépasse la capacité du camion, on crée une nouvelle zone et on passe au camion suivant
         else:
             zones.append([cli_zone,chargement,nb_cli])
             cli_zone = []
             chargement = 0
             nb_cli = 0
             camion_act +=1
+    # On crée une liste des clients non livrés pour les reporter au jour suivant
     non_livré = []
+    # Si la liste des clients non livrés est vide, on renvoie un angle final de 0, sinon on renvoie l'angle du premier client non livré et on ajoute les clients non livrés à la liste
     if coor_pol == []:
         angle_final = 0
+    # Si la liste des clients non livrés n'est pas vide, on renvoie l'angle du premier client non livré et on ajoute les clients non livrés à la liste
     else:
         angle_final = coor_pol[0][0]
         for i in range(len(coor_pol)):
