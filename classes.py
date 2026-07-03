@@ -4,7 +4,7 @@ class Camion:
         self.capacite_max = capacite_max
         self.marchandises = [] #Pour chaque jour, on ajoute la liste des identifiants des colis dans l'ordre ainsi que la capacité du camion
 
-class Client:
+class Client:  #Classe qui nous permet de gérer les clients (le dépot est le client dont l'indice est 0)
     def __init__(self, id_client, coordonnées, demande):
         self.id_client = id_client 
         self.coordonnées = coordonnées
