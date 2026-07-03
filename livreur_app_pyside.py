@@ -338,7 +338,7 @@ class ManagerApp(QMainWindow):
         bar.setStyleSheet(f"background:{PANEL_BG}; border-bottom:1px solid {LINE};")
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(18, 0, 18, 0)
-        brand = QLabel("Flux Marchandises")
+        brand = QLabel("Mineschandises")
         brand.setStyleSheet(f"color:{BLUE_DARK}; font-weight:700; font-size:14px;")
         layout.addWidget(brand)
         layout.addStretch()
