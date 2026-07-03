@@ -1,12 +1,17 @@
 **Etapes de la reflexion :**
 
-1/ Quadriller l'espace en petites zones puis dans chaque zone calculer la matrice de distance entre chaque client pour déterminer l'odre de livriaison.
+1/ Quadriller l'espace en autant de zones qu'il y a de camion puis dans chaque zone calculer l'ordre de livraison qui minimise la distance total parcourue par le camion.
 2/ Faire plutôt comme un radar : le centre est le dépot et ensuite c'est une ligne qui tourne sur toute la zone et qui s'arrête quand le chargement est maximal. Si tous les colis n'ont pas pu être chargés la barre s'arrête est reprend là où elle s'est arrêtée le lendemain
 
 **Affichage**
 
-API/bibliothèèques utilisées
-Récupération des données en coordonnées GPS.
+API/bibliothèques utilisées : 
+-PySide6 pour l'interface graphique (faire des widgets en Python)
+-OSRM (Open Source Routing Machine) est une API qui permet de gérer de nombreuses choses sur les cartes. On lui donne deux points, puis elle nous renvoie plein d'autres points qui suivent la route entre nos deux points initiaux pour avoir un parcours réaliste. L'API nous permet aussi d'obtenir la matrice des distances entre l'ensemble des clients en se déplaçant en voiture et en suivant les routes. 
+-Colorsys qui nous permet de convertir des couleurs HSV (Hue Saturation Value), plus pratique pour générer des couleurs différentes en RGB pour l'affichage. 
+
+Récupération des données en coordonnées GPS : 
+Pour ce faire, on place aléatoirement nos clients dans une grille classique de 40 par 40 centrée en (0,0), le centre représente le dépôt. On fait le calcul des trajectoires les plus optimales, puis on translate les résultats sur Paris en plaçant le dépôt sur l'Hôtel de ville et en appliquant un facteur 0.06 aux coordonnées. 
 
 **Difficultés rencontrées**
 
