@@ -272,6 +272,7 @@ class ManagerApp(QMainWindow):
         root.addWidget(body)
 
     def _load_all_data_from_backend(self): #le pont entre le moteur de calcul (angle_main.py) et l'interface : on lit ses variables globales et on les transforme en dictionnaires que l'UI sait afficher
+        print("IMPORTATION DES TOURNÉES")
         for cid, client in main.Clients.items():
             if isinstance(cid, tuple) or cid == 0:
                 continue #le dico Clients contient chaque client deux fois (une fois par id entier, une fois par coordonnées) + le dépôt : on ne garde que les entrées par id entier
@@ -449,7 +450,7 @@ class ManagerApp(QMainWindow):
         layout.setContentsMargins(0, 0, 8, 0)
         layout.setSpacing(10)
 
-        btn_back = QPushButton("Retour au planning général")
+        btn_back = QPushButton("Retour")
         btn_back.setStyleSheet(f"text-align: left; color: {INK_SOFT}; border: none; font-weight: bold; font-size: 12px; padding: 4px 0px; background: transparent;")
         btn_back.setCursor(Qt.PointingHandCursor)
         btn_back.clicked.connect(self._close_details)
@@ -486,7 +487,6 @@ class ManagerApp(QMainWindow):
         self.depart_input.textEdited.connect(self._on_departure_time_edited)
         depart_row.addWidget(depart_input_label)
         depart_row.addWidget(self.depart_input, 1)
-        assignment_layout.addLayout(driver_row)
         assignment_layout.addLayout(depart_row)
 
         self.detail_map_checkbox = QCheckBox("Afficher le trajet sur la carte")
@@ -576,34 +576,35 @@ class ManagerApp(QMainWindow):
         self.table.resizeRowsToContents()
         self.left_container.setCurrentIndex(1)
 
-    def _on_driver_name_edited(self, new_text):
+    def _on_driver_name_edited(self, new_text): #branché sur textEdited du champ chauffeur : se déclenche à chaque frappe clavier
         if self.active_route_id and self.active_route_id in self.routes_model:
-            self.routes_model[self.active_route_id]["driver"] = new_text
+            self.routes_model[self.active_route_id]["driver"] = new_text #on garde la donnée à jour dans le modèle, sinon elle serait perdue en rouvrant une autre tournée puis en revenant sur celle-ci
             if self.active_route_id in self.route_cards_references:
-                self.route_cards_references[self.active_route_id].update_driver_name_display(new_text)
+                self.route_cards_references[self.active_route_id].update_driver_name_display(new_text) #et on répercute tout de suite le changement sur la carte affichée dans la liste, sans attendre de fermer le détail
 
-    def _on_departure_time_edited(self, new_time):
+    def _on_departure_time_edited(self, new_time): #même chose mais avec l'heure de départ
         if self.active_route_id and self.active_route_id in self.routes_model:
             self.routes_model[self.active_route_id]["stats"]["depart"] = new_time
             if self.active_route_id in self.route_cards_references:
                 self.route_cards_references[self.active_route_id].update_departure_display(new_time)
 
-    def _on_detail_checkbox_toggled(self, checked):
+    def _on_detail_checkbox_toggled(self, checked): #relaie simplement vers la fonction commune qui gère déjà le cas "case cochée depuis la liste"
         if self.active_route_id:
             self._toggle_route_on_map(self.active_route_id, checked)
 
-    def _close_details(self):
+    def _close_details(self):  #retour à la vue d'ensemble (bouton "Retour" ou touche Entrée dans le champ chauffeur)
         self.active_route_id = None
         self.left_container.setCurrentIndex(0)
 
-    def _on_row_selected(self):
+    def _on_row_selected(self): #se déclenche quand on clique sur une ligne du tableau "Ordre de passage optimisé"
         selected = self.table.selectedItems()
         if not selected: return
         row = selected[0].row()
         item_step = self.table.item(row, 0)
         if not item_step: return
         
-        order = item_step.data(Qt.UserRole)
+        order = item_step.data(Qt.UserRole) #récupère le dictionnaire de la commande qu'on avait stocké dans _open_route_details, ou None pour les lignes dépôt (elles n'en ont jamais reçu)
+
         root_obj = self.quick_map.rootObject()
         if root_obj:
             if order:
@@ -612,7 +613,8 @@ class ManagerApp(QMainWindow):
                 #Si pas d'order_data associé, c'est que l'utilisateur a cliqué sur le dépôt initial ou final
                 root_obj.centerOnStop(DEPOT["lat"], DEPOT["lon"])
 
-    def _setup_future_tab(self):
+    def _setup_future_tab(self): #construit le 2e onglet : un grand tableau qui liste toutes les commandes de tous les jours, tous camions confondus, pour avoir une vue d'ensemble du flux
+
         layout = QVBoxLayout(self.tab_future)
         layout.setContentsMargins(10, 10, 10, 10)
         
@@ -621,7 +623,8 @@ class ManagerApp(QMainWindow):
         layout.addWidget(title)
 
         columns = ["ID Commande", "Adresse de livraison", "Volume Colis", "Échéance Planifiée"]
-        table_future = QTableWidget(len(self.orders_db), len(columns))
+        table_future = QTableWidget(len(self.orders_db), len(columns)) #ici on connaît déjà le nombre total de commandes, contrairement au tableau détail qui est rempli dynamiquement, donc on peut fixer le nombre de lignes directement
+
         table_future.setHorizontalHeaderLabels(columns)
         table_future.verticalHeader().setVisible(False)
         table_future.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -629,7 +632,7 @@ class ManagerApp(QMainWindow):
         table_future.setShowGrid(False)
 
         header = table_future.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.Stretch) #l'adresse est la colonne la plus variable en longueur, c'est elle qui absorbe l'espace restant
         for col in (0, 2, 3): header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
 
         table_future.setStyleSheet(f"""
@@ -639,7 +642,7 @@ class ManagerApp(QMainWindow):
             QTableWidget::item:selected {{ background: {BLUE_PALE}; color: {INK}; }}
         """)
 
-        sorted_orders = sorted(self.orders_db.items(), key=lambda x: (x[1]['jour'], x[0]))
+        sorted_orders = sorted(self.orders_db.items(), key=lambda x: (x[1]['jour'], x[0]))  #tri par jour d'abord (pour lire le flux chronologiquement), puis par id de commande à jour égal (juste pour un ordre stable et prévisible)
         for row, (c_id, data) in enumerate(sorted_orders):
             values = [c_id, data["adresse"], str(data["volume"]), data["date_limite"]]
             for col, val in enumerate(values):
@@ -649,12 +652,13 @@ class ManagerApp(QMainWindow):
 
         layout.addWidget(table_future)
 
-    def closeEvent(self, event):
-        if os.path.exists(self.qml_filename): os.remove(self.qml_filename)
-        event.accept()
+    def closeEvent(self, event): #appelée automatiquement par Qt quand on ferme la fenêtre : on supprime le fichier QML temporaire créé dans __init__
+        if os.path.exists(self.qml_filename): 
+            os.remove(self.qml_filename)
+            event.accept()
 
-if __name__ == "__main__":
+if __name__ == "__main__": #point d'entrée : ne s'exécute que si on lance ce fichier directement (pas si on l'importe depuis un autre module)
     app = QApplication(sys.argv)
     window = ManagerApp()
     window.show()
-    sys.exit(app.exec())
+    sys.exit(app.exec()) #exec() lance la boucle d'événements Qt (clics, frappes clavier...) et ne rend la main qu'à la fermeture de l'appli
