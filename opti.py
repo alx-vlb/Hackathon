@@ -28,7 +28,7 @@ def matrice_dist_reel(coords): #coords est une liste de tuple (longitude,latitud
     except:
         print(f"Erreur OSRM")
 
-def longueur(listcli): #listcli est une liste d'identifiants des clients qui commence et se termine par 0
+def longueur(listcli,mat): #listcli est une liste d'identifiants des clients qui commence et se termine par 0
     n = len(listcli)
     dist = 0
     for i in range(n-1):

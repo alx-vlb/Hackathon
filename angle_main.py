@@ -1,10 +1,11 @@
-from opti import matrice_distance, opti_cli
-from donnees import lire_scenario, generer_coordonnees
+from opti import matrice_distance,matrice_dist_reel, opti_cli
+from donnees import lire_scenario, generer_coordonnees, generer_coordonnees_gps
 from angle_subdivision import angle_subdiv
 import classes
 
 # Lecture du scénario
-infos, demande = lire_scenario("mines_tms_instances/C_D_H_3.txt")
+scenario = input("Quel scénario voulez-vous charger (ex :C_S_H_1 ) ? ")
+infos, demande = lire_scenario("mines_tms_instances/" + scenario + ".txt")
 
 nb_client = infos[0]
 nb_jours = infos[1]
@@ -58,4 +59,3 @@ for jour in range(nb_jours):
         for client_id in no_delivered:
             demande[jour + 1][client_id] += demande[jour][client_id]
 
-print(course)

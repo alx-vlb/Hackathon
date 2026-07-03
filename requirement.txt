@@ -1,0 +1,11 @@
+geopy.geocoders
+sys
+os
+requests
+colorsys
+statistics
+random
+numpy 
+PySide6
+matplotlib
+math

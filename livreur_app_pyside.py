@@ -8,43 +8,46 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QFrame, QToolButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QGridLayout, QScrollArea, QSplitter, QStackedWidget, 
-    QCheckBox, QPushButton, QAbstractItemView, QLineEdit, QTabWidget
+    QCheckBox, QPushButton, QAbstractItemView, QLineEdit, QTabWidget,
+    QSizePolicy
 )
 from PySide6.QtQuickWidgets import QQuickWidget
-
-# --- IMPORTATION DU MOTEUR DE CALCUL ---
-# Cela va exécuter angle_main.py en arrière-plan et nous donner accès à ses variables
 import angle_main as main
 import donnees
 
-# Le Dépôt est forcé aux coordonnées de Paris pour l'affichage de la carte
+# On place le dépôt à ses vraie coordonnées dans Paris
 DEPOT = {"nom": "Dépôt Central", "lat": 48.8566, "lon": 2.3522}
 
-# Thème UI
-BLUE_DARK, BLUE_PALE, INK, INK_SOFT, LINE, BG, PANEL_BG = "#1d4ed8", "#eaf1fd", "#1f2533", "#5b6472", "#e3e7ee", "#f5f7fa", "#ffffff"
+# Thème de l'interface
+BLUE_DARK, BLUE_PALE, INK, INK_SOFT, LINE, BG, PANEL_BG = "#0f691e", "#eaf1fd", "#1f2533", "#5b6472", "#e3e7ee", "#f5f7fa", "#ffffff"
 
-# ===========================================================================
-# Fonctions Techniques
-# ===========================================================================
+# Fonctions utiles
 
-def get_route_color(index):
-    golden_ratio_conjugate = 0.618033988749895
-    hue = (index * golden_ratio_conjugate) % 1.0
-    return '#{:02x}{:02x}{:02x}'.format(*(int(c*255) for c in colorsys.hsv_to_rgb(hue, 0.85, 0.90)))
+def get_route_color(day_idx, truck_idx):
+    #On cherche à Génèrer une couleur unique avec une dispersion maximale pour les camions
+    # On attribue une plage fixe de 10 index par jour.
+    slot_index = (day_idx * 12) + truck_idx/2
+    
+    # On utilise le nombre d'or pour tourner sur le spectre chromatique sans retomber sur une couleur déjà utilisée
+    hue = (slot_index * 0.618033988749895) % 1.0
+    
+    # Conversion en Hexadécimal RGB (Saturé à 80% et Luminosité à 70% pour être lisible mais avec un style un peu sobre et professionnel)
+    return '#{:02x}{:02x}{:02x}'.format(*(int(c*255) for c in colorsys.hsv_to_rgb(hue, 0.80, 0.70)))
 
+
+#Tracé des routes
 def fetch_road_route(coords):
-    coord_str = ";".join(f"{lon},{lat}" for lat, lon in coords)
-    url = f"https://router.project-osrm.org/route/v1/driving/{coord_str}?overview=full&geometries=geojson"
-    try:
-        resp = requests.get(url, timeout=4)
-        geometry = resp.json()["routes"][0]["geometry"]["coordinates"]
-        return [{"lat": lat, "lon": lon} for lon, lat in geometry]
-    except:
-        return [{"lat": lat, "lon": lon} for lat, lon in coords]
 
-# ===========================================================================
-# QML Code (Carte)
-# ===========================================================================
+    coord_str = ";".join(f"{lon},{lat}" for lat, lon in coords) #On adapte le format des coordonnées pour l'API d'OSRM
+    url = f"https://router.project-osrm.org/route/v1/driving/{coord_str}?overview=full&geometries=geojson" #On prépare la requête qu'on envoie à au serveurs publics d'OSRM pour avoir le tracé complet des routes pour des camions
+    try:
+        resp = requests.get(url, timeout=4) #On envoie la requête en imposant un timeout de 4 secondes pour éviter que le programme se bloque indéfiniment en cas de conflit
+        geometry = resp.json()["routes"][0]["geometry"]["coordinates"] #La réponse est au format json on l'extrait donc sous la forme d'une liste
+        return [{"lat": lat, "lon": lon} for lon, lat in geometry] #On met enfin tout sous la forme d'une liste de dictionnaire, c'est le format adapté au code QML de la carte
+    except:
+        return [{"lat": lat, "lon": lon} for lat, lon in coords] #Si l'utilisateur ne peut pas communiquer avec les serveur d'OSRM, on affiche simplement les points reliés par des lignes droites
+
+# Code QML de la carte
 
 QML_MAP_CODE = f"""import QtQuick
 import QtLocation
@@ -102,58 +105,86 @@ Rectangle {{
 }}
 """
 
-# ===========================================================================
-# Composants Graphiques de l'interface
-# ===========================================================================
+# Ne maîtrisant pas assez le Java Script, nous avons fait appel à un agent IA pour générer le code QML de la carte 
 
-class CollapsiblePanel(QWidget):
+# Composants Graphiques de l'interface
+
+class CollapsiblePanel(QWidget): #on créé une classe "Menu déroulant" car il n'y en a pas parmis les composants de base de Qt
     def __init__(self, title, start_open=True, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        outer = QVBoxLayout(self)
+        self.setAttribute(Qt.WA_StyledBackground, True) #On force Qt à appliquer le code CSS à notre attribut car il ne le fait pas par défault 
+        
+
+        
+        outer = QVBoxLayout(self) #self va empiler les éléments de façon verticale
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        self.toggle_btn = QToolButton()
-        self.toggle_btn.setText(f"  {title}")
-        self.toggle_btn.setCheckable(True)
-        self.toggle_btn.setChecked(start_open)
-        self.toggle_btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        self.toggle_btn.setArrowType(Qt.DownArrow if start_open else Qt.RightArrow)
-        self.toggle_btn.setStyleSheet(f"QToolButton {{ background: {PANEL_BG}; border: none; border-bottom: 1px solid {LINE}; padding: 12px 6px; font-weight: 600; font-size: 13px; color: {INK}; text-align: left; }}")
-        self.toggle_btn.clicked.connect(self._toggle)
-        self.content = QWidget()
-        self.content.setStyleSheet(f"background: {PANEL_BG};")
-        self.content_layout = QVBoxLayout(self.content)
-        self.content_layout.setContentsMargins(12, 12, 12, 12)
-        self.content.setVisible(start_open)
+        
+        self.toggle_btn = QPushButton() #rends l'entête cliquable
+        self.toggle_btn.setText(title)
+        self.toggle_btn.setCheckable(True) #transforme le bouton en interrupteur on/off
+        self.toggle_btn.setChecked(start_open) #définit l'état initial de l'interrupteur
+        
+        self.toggle_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed) #Le bouton s'ettire sur toute la largeur de la fenêtre de façon à ce que celle-ci soit ajustable
+        self.toggle_btn.setStyleSheet(f"""
+            QPushButton {{ 
+                background: #fafbfc; 
+                border: none; 
+                border-bottom: 1px solid {LINE}; 
+                border-top-left-radius: 7px;
+                border-top-right-radius: 7px;         
+                padding: 12px 15px; 
+                font-weight: 600; 
+                font-size: 13px; 
+                color: {INK}; 
+                text-align: left; 
+            }}
+            QPushButton:hover {{
+                background: #f0f2f5;
+            }}
+        """) # Code CSS pour le designe du bouton
+        self.toggle_btn.clicked.connect(self._toggle) #Cliquer sur le bouton actionne la fonction _toggle
+        
+        self.content = QWidget() #on créé le "tiroir" dans lequel on mettra les informations de notre menu déroulant
+        self.content.setStyleSheet(f"background: {PANEL_BG}; border-bottom-left-radius: 7px; border-bottom-right-radius: 7px;") #oon arrondit les angles du bas
+        self.content_layout = QVBoxLayout(self.content) #On définit un layout propre au tiroir pour pouvoir organiser les éléments qu'il contient
+        self.content_layout.setContentsMargins(12, 12, 12, 12) #ajout d'un padding
+        self.content.setVisible(start_open) #Le tiroir sera visible ou non au démarrage en fonction de la valeur de start_open
+        
+        #On empile nos éléments verticalement dans outer
         outer.addWidget(self.toggle_btn)
         outer.addWidget(self.content)
-        self.setStyleSheet(f"CollapsiblePanel {{ background: {PANEL_BG}; border: 1px solid {LINE}; border-radius: 8px; margin-bottom: 8px; }}")
 
-    def _toggle(self):
+        #On créé une bordure autour de self de façon à pouvoir empile tout les boutons "jours" élégamment.
+        self.setStyleSheet(f"CollapsiblePanel {{ background: {PANEL_BG}; border: 1px solid {LINE}; border-radius: 8px; margin-bottom: 12px; }}")
+
+    def _toggle(self): #permet d'afficher/masquer les menus déroulants.
+        
         opened = self.toggle_btn.isChecked()
         self.content.setVisible(opened)
-        self.toggle_btn.setArrowType(Qt.DownArrow if opened else Qt.RightArrow)
 
 class RouteCard(QFrame):
-    on_details_requested = Signal(str)
-    on_visibility_toggled = Signal(str, bool)
+    on_details_requested = Signal(str) #Émettra un str lorsque l'utilisateur cliquera sur voir détails
+    on_visibility_toggled = Signal(str, bool) #Émets aussi un booléen 
 
     def __init__(self, route_data):
         super().__init__()
-        self.route_data = route_data
-        self.setStyleSheet(f"RouteCard {{ background: #fafbfc; border: 1px solid {LINE}; border-radius: 6px; }} RouteCard:hover {{ border-color: {route_data['color']}; background: #ffffff; }}")
-        layout = QHBoxLayout(self)
+        self.route_data = route_data #On garde en mémoire le dictionnaire contenant toutes les infos du camion reçu en paramètre
+        self.setStyleSheet(f"RouteCard {{ background: #fafbfc; border: 1px solid {LINE}; border-radius: 6px; }} RouteCard:hover {{ border-color: {route_data['color']}; background: #ffffff; }}") #La case qui affiche la tournéee change d'aspect lorsque la souris passe dessus de sorte à comprendre intuitivement que l'on peut intéragir avec
+        
+        layout = QHBoxLayout(self)  #Ici on a un layout horizontal (QH) et non vertical (QV) comme tout à l'heure 
         layout.setContentsMargins(12, 12, 12, 12)
 
-        self.checkbox = QCheckBox()
-        self.checkbox.setStyleSheet(f"QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 4px; border: 2px solid {route_data['color']}; }} QCheckBox::indicator:checked {{ background: {route_data['color']}; }}")
-        self.checkbox.toggled.connect(lambda checked: self.on_visibility_toggled.emit(self.route_data['id'], checked))
+        self.checkbox = QCheckBox() #on définit la case à cocher
+        self.checkbox.setStyleSheet(f"QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 4px; border: 2px solid {route_data['color']}; }} QCheckBox::indicator:checked {{ background: {route_data['color']}; }}") #On dessine la case à cocher, elle prend la même couleur que celle utilisé pour tracer la route
+        self.checkbox.toggled.connect(lambda checked: self.on_visibility_toggled.emit(self.route_data['id'], checked)) #envoie à l'application l'information qu'une case à été coché (checked) et qu'elle case à été coché (self.route_data['id'])
         
-        info_layout = QVBoxLayout()
-        driver_display = route_data['driver'].strip() if route_data['driver'].strip() else "Non attribuée"
+        #On ajoute toute les informations que l'on souhaite afficher dans la case
+        #======================================================================
+        info_layout = QVBoxLayout() #empiler le titre et le sous-titre
+        driver_display = route_data['driver'].strip() if route_data['driver'].strip() else "Non attribuée" #si aucun chauffeur n'est attribué à la tournée on écrit "Non attribuée"
         
-        self.title = QLabel(f"{route_data['id']} - {driver_display}")
+        self.title = QLabel(f"{route_data['label_display']} - {driver_display}")
         self.title.setStyleSheet(f"font-weight: bold; color: {INK}; font-size: 13px; background: transparent;")
         
         self.subtitle = QLabel(f"Commandes : {len(route_data['orders'])}  .  Départ : {route_data['stats']['depart']}")
@@ -166,15 +197,19 @@ class RouteCard(QFrame):
         btn_details.setStyleSheet(f"color: {route_data['color']}; font-weight: bold; border: none; background: transparent; font-size: 12px;")
         btn_details.setCursor(Qt.PointingHandCursor)
         btn_details.clicked.connect(lambda: self.on_details_requested.emit(self.route_data['id']))
+        #======================================================================
 
+        #On place maintenant les éléments dans le tiroir comme on l'a fait dans la calsse précédente
         layout.addWidget(self.checkbox)
         layout.addLayout(info_layout)
-        layout.addStretch()
+        layout.addStretch() #On ajoute un espace entre le bouton "voir détails" et la checkbox et les infos par souci d'esthétisme.
         layout.addWidget(btn_details)
+
+#Les 3 fonctions qui suivent servent à mettre à jour la carte en direct sans avoir besoin de la regénérer à chaque fois
 
     def update_driver_name_display(self, new_name):
         driver_display = new_name.strip() if new_name.strip() else "Non attribuée"
-        self.title.setText(f"{self.route_data['id']} - {driver_display}")
+        self.title.setText(f"{self.route_data['label_display']} - {driver_display}")
 
     def update_departure_display(self, new_depart):
         self.subtitle.setText(f"Commandes : {len(self.route_data['orders'])}  .  Départ : {new_depart}")
@@ -184,37 +219,28 @@ class RouteCard(QFrame):
         self.checkbox.setChecked(checked)
         self.checkbox.blockSignals(False)
 
-# ===========================================================================
-# Main Application Window
-# ===========================================================================
+#la fenêtre principale, celle que le magasin utilise pour voir toutes les tournées du dépôt
 
-class ManagerApp(QMainWindow):
+class ManagerApp(QMainWindow): 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Vue Globale Magasin - ERP Logistique")
+        self.setWindowTitle("Gestion des commandes du magasin")
         self.resize(1340, 840)
         self.setStyleSheet(f"QMainWindow {{ background: {BG}; }}")
 
-        self.route_cards_references = {}
-        self.active_route_id = None
+        self.route_cards_references = {} #on garde une référence vers chaque RouteCard affichée, pour pouvoir les mettre à jour depuis l'extérieur (ex: cocher une case) sans reconstruire toute la liste
+        self.active_route_id = None #id de la tournée actuellement affichée dans la page détail, None si on est sur la vue d'ensemble
         
-        self.orders_db = {}
-        self.algo_output = []
-        self.routes_model = {}
+        self.orders_db = {} #toutes les commandes de tous les jours, remplies par _load_all_data_from_backend()
+        self.routes_model = {} #toutes les tournées de tous les jours (regroupements de commandes déjà optimisés par l'algo)
 
-        # 1. Extraction et formatage des données depuis main.py
-        self._load_data_from_backend()
+        self._load_all_data_from_backend() #on va chercher les données calculées par angle_main.py et on les remet en forme pour l'interface
 
-        # 2. Construction du pont de données
-        self._build_routes_from_algo()
-
-        # 3. Fichier QML temporaire
         dossier_du_script = os.path.dirname(os.path.abspath(__file__))
         self.qml_filename = os.path.join(dossier_du_script, "map_manager.qml")
-        with open(self.qml_filename, "w", encoding="utf-8") as f:
+        with open(self.qml_filename, "w", encoding="utf-8") as f: #le QML doit être un vrai fichier sur le disque pour que QQuickWidget puisse le charger, on ne peut pas lui passer une simple chaîne de caractères
             f.write(QML_MAP_CODE)
 
-        # 4. Structure principale
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
@@ -236,8 +262,8 @@ class ManagerApp(QMainWindow):
         self.tab_future = QWidget()
         self._setup_future_tab()
 
-        self.tabs.addTab(self.tab_today, "Tournées du Jour (J1)")
-        self.tabs.addTab(self.tab_future, "Commandes en attente (Futur)")
+        self.tabs.addTab(self.tab_today, "Planning des Tournées")
+        self.tabs.addTab(self.tab_future, "Synthèse Globale Commandes")
         
         body = QWidget()
         body_layout = QVBoxLayout(body)
@@ -245,83 +271,67 @@ class ManagerApp(QMainWindow):
         body_layout.addWidget(self.tabs)
         root.addWidget(body)
 
-        self._update_unassigned_counters()
-
-    def _load_data_from_backend(self):
-        """Traduit les objets métier de classes.py en dictionnaires d'interface"""
-        print("\n--- SYNCHRONISATION AVEC LE MOTEUR ALGORITHMIQUE ---")
-        
-        # A. Construction de la base de données globale
+    def _load_all_data_from_backend(self): #le pont entre le moteur de calcul (angle_main.py) et l'interface : on lit ses variables globales et on les transforme en dictionnaires que l'UI sait afficher
         for cid, client in main.Clients.items():
             if isinstance(cid, tuple) or cid == 0:
-                continue # On ignore les clés sous forme de tuple et le Dépôt (0)
+                continue #le dico Clients contient chaque client deux fois (une fois par id entier, une fois par coordonnées) + le dépôt : on ne garde que les entrées par id entier
             
+            
+           
+            client_idx = cid - 1 #les id clients commencent à 1 (0 = dépôt), mais demande[jour] est un tableau qui commence à l'index 0 : d'où le décalag
+           
+           
             for jour_idx in range(main.nb_jours):
-                vol = client.demande[jour_idx]
-                if vol > 0: # S'il y a un colis prévu pour ce jour
-                    order_id = f"C-{cid}-J{jour_idx+1}"
-                    # Attribution d'une fausse rue pour l'esthétique
-                    rue = donnees.rues[cid % len(donnees.rues)] 
-                    
+                vol = main.demande[jour_idx][client_idx]
+                if vol > 0: #s'il n'y a pas de volume ce jour-là pour ce client, on ne crée pas de commande
+                    order_id = f"C-{cid}-J{jour_idx+1}" #identifiant unique = client + jour, pour ne pas mélanger les commandes du même client à des jours différents
+                    rue = donnees.rues[cid % len(donnees.rues)] #on pioche un nom de rue "au hasard" dans la liste de donnees.py, juste pour avoir un affichage lisible (pas de vraie adresse dans les données du moteur)
                     lat, lon = client.coordonnées
-                    # Si l'algo utilise des coordonnées cartésiennes de test (-20 à 20), on les projette sur Paris
-                    if -100 < lat < 100 and -100 < lon < 100 and not (40 < lat < 55):
+                    
+                    if -100 < lat < 100 and -100 < lon < 100 and not (40 < lat < 55): #si les coordonnées ressemblent à du cartésien abstrait (généré par generer_coordonnees) plutôt qu'à du GPS réel autour de Paris, on les "projette" grossièrement sur Paris pour que la carte affiche quelque chose de cohérent
+
                         lat = 48.8566 + (lat * 0.003)
                         lon = 2.3522 + (lon * 0.003)
                     
                     self.orders_db[order_id] = {
                         "adresse": f"{rue}, 75000 Paris",
-                        "date_commande": f"Jour {max(1, jour_idx)}",
                         "date_limite": f"Jour {jour_idx+1}",
                         "volume": vol,
                         "lat": lat,
                         "lon": lon,
                         "jour": jour_idx + 1
                     }
-        
-        # B. Récupération des tournées calculées pour le Jour 1
-        if 1 in main.course:
-            for trajet in main.course[1]:
-                camion_commandes = []
-                for cid in trajet:
-                    if cid != 0: # On ignore le passage au dépôt (0)
-                        order_id = f"C-{cid}-J1"
-                        if order_id in self.orders_db:
-                            camion_commandes.append(order_id)
-                
-                # S'il y a des clients dans ce camion, on sauvegarde la tournée
-                if camion_commandes:
-                    self.algo_output.append(camion_commandes)
 
-    def _build_routes_from_algo(self):
-        """Transforme l'ALGO_OUTPUT (liste d'IDs) en données complètes pour l'UI"""
-        for idx, client_ids in enumerate(self.algo_output):
-            truck_name = f"Camion N°{idx+1}"
-            
-            course_orders = []
-            for order_id in client_ids:
-                if order_id in self.orders_db:
-                    order_data = self.orders_db[order_id].copy()
-                    order_data["id"] = order_id
-                    course_orders.append(order_data)
+        for jour in range(1, main.nb_jours + 1): #ici on reconstruit les tournées pour tous les jours
 
-            route_ui = {
-                "id": truck_name,
-                "driver": "",  
-                "date": "Jour 1", 
-                "stats": {
-                    "temps": "Non calculé", 
-                    "distance": "Non calculée",
-                    "depart": "08:30"
-                },
-                "color": get_route_color(idx),
-                "orders": course_orders,
-                "visible": False
-            }
-            self.routes_model[truck_name] = route_ui
-        print("--- INTERFACE PRÊTE ---\n")
+            tournees_du_jour = main.course.get(jour, [])
+            for idx, trajet in enumerate(tournees_du_jour):
+                client_ids = [cid for cid in trajet if cid != 0] #on retire les passages au dépôt (0), qui ouvrent et ferment chaque trajet
+                if not client_ids:
+                    continue
+                    
+                unique_route_id = f"J{jour}_Camion_{idx+1}" #il faut préfixer par le jour, sinon "Camion N°1" du jour 2 écraserait "Camion N°1" du jour 1 dans routes_model
 
-    def _build_topbar(self):
+                course_orders = []
+                for cid in client_ids:
+                    order_id = f"C-{cid}-J{jour}"
+                    if order_id in self.orders_db: #normalement toujours vrai puisqu'on vient de le construire juste au-dessus, mais on vérifie par sécurité
+                        order_data = self.orders_db[order_id].copy()
+                        order_data["id"] = order_id
+                        course_orders.append(order_data)
+
+                self.routes_model[unique_route_id] = {
+                    "id": unique_route_id,
+                    "jour": jour,
+                    "label_display": f"Camion N°{idx+1}",
+                    "driver": "",  
+                    "stats": {"depart": "08:30"},
+                    "color": get_route_color(jour, idx),
+                    "orders": course_orders,
+                    "visible": False
+                }
+
+    def _build_topbar(self): #juste le bandeau du haut avec le titre, rien d'interactif ici
         bar = QFrame()
         bar.setFixedHeight(52)
         bar.setStyleSheet(f"background:{PANEL_BG}; border-bottom:1px solid {LINE};")
@@ -333,23 +343,19 @@ class ManagerApp(QMainWindow):
         layout.addStretch()
         return bar
 
-    # ===========================================================================
-    # GESTION ONGLET 1 : PLANIFICATION DU JOUR
-    # ===========================================================================
-
-    def _setup_today_tab(self):
+    def _setup_today_tab(self): #construit l'onglet principal : à gauche la liste des tournées (ou le détail d'une tournée), à droite la carte
         layout = QVBoxLayout(self.tab_today)
         layout.setContentsMargins(0, 10, 0, 0)
         
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Horizontal) #permet de faire glisser la frontière entre le panneau de gauche et la carte
         splitter.setStyleSheet("QSplitter::handle { background: transparent; }")
         
-        self.left_container = QStackedWidget()
+        self.left_container = QStackedWidget() #un "empileur" de pages : une seule des deux pages ajoutées ci-dessous est visible à la fois (comme des onglets, mais sans barre d'onglets visible)
         self.left_container.setMinimumWidth(460)
         self.left_container.setStyleSheet(f"background: {PANEL_BG}; border: none;")
         
-        self.view_dispatch = self._build_dispatch_page()
-        self.view_details = self._build_details_page()
+        self.view_dispatch = self._build_multi_day_dispatch_page() #page 0 : la liste de toutes les tournées, regroupées par jour
+        self.view_details = self._build_details_page() #page 1 : le détail d'une tournée précise (ordre de passage, affectation d'un chauffeur...)
         self.left_container.addWidget(self.view_dispatch)
         self.left_container.addWidget(self.view_details)
         
@@ -357,19 +363,21 @@ class ManagerApp(QMainWindow):
         self.map_frame.setStyleSheet(f"background:{PANEL_BG}; border:1px solid {LINE}; border-radius:8px;")
         map_layout = QVBoxLayout(self.map_frame)
         map_layout.setContentsMargins(0, 0, 0, 0)
-        self.quick_map = QQuickWidget()
-        self.quick_map.setResizeMode(QQuickWidget.SizeRootObjectToView)
+
+        self.quick_map = QQuickWidget() #widget Qt qui sait afficher du QML (donc notre carte OpenStreetMap) à l'intérieur d'une fenêtre PySide "classique"
+        
+        self.quick_map.setResizeMode(QQuickWidget.SizeRootObjectToView)  #la carte QML doit s'adapter à la taille du widget, pas l'inverse
+
         self.quick_map.setSource(QUrl.fromLocalFile(self.qml_filename))
         map_layout.addWidget(self.quick_map)
 
         splitter.addWidget(self.left_container)
         splitter.addWidget(self.map_frame)
-        splitter.setSizes([460, 880])
-        
+        splitter.setSizes([460, 880]) #largeur de départ de chaque côté, l'utilisateur peut ensuite l'ajuster à la souris
         layout.addWidget(splitter)
 
-    def _build_dispatch_page(self):
-        scroll = QScrollArea()
+    def _build_multi_day_dispatch_page(self): #la vue d'ensemble : un menu déroulant par jour, contenant les tournées de ce jour-là
+        scroll = QScrollArea() #indispensable car la liste peut devenir plus haute que l'écran une fois tous les jours dépliés
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setStyleSheet(f"QScrollArea {{ background: {PANEL_BG}; border: none; }}")
@@ -379,57 +387,60 @@ class ManagerApp(QMainWindow):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 8, 0)
 
-        self.panel_today = CollapsiblePanel("Tournées du jour", start_open=True)
-        
-        for r_id, r_data in self.routes_model.items(): 
-            card = RouteCard(r_data)
-            card.on_visibility_toggled.connect(self._toggle_route_on_map)
-            card.on_details_requested.connect(self._open_route_details)
+        for jour in range(1, main.nb_jours + 1):
+            routes_du_jour = [r for r in self.routes_model.values() if r["jour"] == jour] #on filtre routes_model pour ne garder que les tournées de ce jour précis
+            if not routes_du_jour:
+                continue #si aucune tournée ce jour-là (aucun client à livrer), on n'affiche même pas le panneau, pour ne pas polluer l'écran
+                
+            panel_jour = CollapsiblePanel(f"Jour {jour} ({len(routes_du_jour)} tournées)", start_open=(jour==1)) #seul le jour 1 est déplié par défaut, pour que l'écran ne soit pas noyé au démarrage
+
+            for r_data in routes_du_jour:
+                card = RouteCard(r_data)
+                card.on_visibility_toggled.connect(self._toggle_route_on_map) #quand on coche la case d'une carte, on prévient ManagerApp pour qu'il mette à jour la carte OSM
+
+                card.on_details_requested.connect(self._open_route_details)  #quand on clique sur "Voir détails", on bascule vers la page détail
+                
+                self.route_cards_references[r_data["id"]] = card
+                panel_jour.content_layout.addWidget(card)
+                
+            layout.addWidget(panel_jour)
             
-            self.route_cards_references[r_data["id"]] = card
-            self.panel_today.content_layout.addWidget(card)
-            
-        layout.addWidget(self.panel_today)
-        layout.addStretch()
+        layout.addStretch() #évite que les panneaux s'étirent pour remplir tout l'espace vertical disponible
         scroll.setWidget(content)
         return scroll
 
-    def _update_unassigned_counters(self):
-        unassigned_count = sum(1 for r in self.routes_model.values() if not r["driver"].strip())
-        
-        if unassigned_count > 0:
-            s = "s" if unassigned_count > 1 else ""
-            self.panel_today.toggle_btn.setText(f"  Tournées du Jour 1 ({unassigned_count} tournée{s} non attribuée{s})")
-        else:
-            self.panel_today.toggle_btn.setText(f"  Tournées du Jour 1 (Toutes les tournées sont attribuées)")
-
-    def _toggle_route_on_map(self, route_id, is_visible):
+    def _toggle_route_on_map(self, route_id, is_visible): #appelée à chaque fois qu'on coche/décoche une tournée, que ce soit depuis la liste ou depuis la page détail
         route_data = self.routes_model[route_id]
         route_data["visible"] = is_visible
         
-        if route_id == self.active_route_id:
+        if route_id == self.active_route_id: #si la tournée qu'on vient de cocher est celle actuellement affichée en détail, on synchronise sa case à cocher aussi
+
             self.detail_map_checkbox.blockSignals(True)
             self.detail_map_checkbox.setChecked(is_visible)
             self.detail_map_checkbox.blockSignals(False)
             
-        if route_id in self.route_cards_references:
+        if route_id in self.route_cards_references: #et inversement, si l'action vient de la page détail, on synchronise la carte correspondante dans la liste
+
             self.route_cards_references[route_id].set_checkbox_state(is_visible)
 
-        root_obj = self.quick_map.rootObject()
-        if not root_obj: return
+        root_obj = self.quick_map.rootObject() #l'objet racine du QML, celui qui expose les fonctions toggleRoute()/centerOnStop() qu'on a définies dans QML_MAP_CODE
+        if not root_obj: return  #sécurité : si la carte n'a pas fini de se charger, on ne fait rien plutôt que de planter
 
         if is_visible:
+            #La route commence au Dépôt
             coords = [(DEPOT["lat"], DEPOT["lon"])]
             markers = []
             for i, order in enumerate(route_data["orders"]):
                 coords.append((order["lat"], order["lon"]))
                 markers.append({"lat": order["lat"], "lon": order["lon"], "label": str(i+1)})
             
-            # Pour éviter les ralentissements réseau, on appelle OSRM que s'il y a peu de points, sinon ligne droite
-            path = fetch_road_route(coords) if len(coords) < 15 else [{"lat": lat, "lon": lon} for lat, lon in coords]
+            #La route se ferme en retournant au Dépôt
+            coords.append((DEPOT["lat"], DEPOT["lon"]))
+            
+            path = fetch_road_route(coords) if len(coords) < 150 else [{"lat": lat, "lon": lon} for lat, lon in coords] #au-delà de 150 points l'API OSRM devient trop lente/risque de refuser la requête, on affiche alors des lignes droites plutôt que de bloquer l'appli
             root_obj.toggleRoute(route_data["id"], route_data["color"], path, markers, True)
         else:
-            root_obj.toggleRoute(route_data["id"], "", [], [], False)
+            root_obj.toggleRoute(route_data["id"], "", [], [], False) #on rappelle la même fonction QML mais avec isVisible=False : c'est elle qui se charge de retirer le tracé et les marqueurs
 
     def _build_details_page(self):
         page = QWidget()
@@ -438,7 +449,7 @@ class ManagerApp(QMainWindow):
         layout.setContentsMargins(0, 0, 8, 0)
         layout.setSpacing(10)
 
-        btn_back = QPushButton("Retour au tableau général")
+        btn_back = QPushButton("Retour au planning général")
         btn_back.setStyleSheet(f"text-align: left; color: {INK_SOFT}; border: none; font-weight: bold; font-size: 12px; padding: 4px 0px; background: transparent;")
         btn_back.setCursor(Qt.PointingHandCursor)
         btn_back.clicked.connect(self._close_details)
@@ -475,6 +486,7 @@ class ManagerApp(QMainWindow):
         self.depart_input.textEdited.connect(self._on_departure_time_edited)
         depart_row.addWidget(depart_input_label)
         depart_row.addWidget(self.depart_input, 1)
+        assignment_layout.addLayout(driver_row)
         assignment_layout.addLayout(depart_row)
 
         self.detail_map_checkbox = QCheckBox("Afficher le trajet sur la carte")
@@ -515,7 +527,7 @@ class ManagerApp(QMainWindow):
         self.active_route_id = route_id
         
         self.driver_input.setText(route_data["driver"])
-        self.truck_label.setText(route_data["id"])
+        self.truck_label.setText(f"Jour {route_data['jour']} — {route_data['label_display']}")
         self.depart_input.setText(route_data["stats"]["depart"])
         
         self.detail_map_checkbox.blockSignals(True)
@@ -528,14 +540,38 @@ class ManagerApp(QMainWindow):
         self.detail_map_checkbox.blockSignals(False)
         
         orders = route_data["orders"]
-        self.table.setRowCount(len(orders))
-        for row, order in enumerate(orders):
+        
+        #On affiche explicitement le Dépôt au début et à la fin du tableau de passage
+        self.table.setRowCount(len(orders) + 2)
+        
+        #Ligne de départ (Dépôt)
+        item_start_step = QTableWidgetItem("1")
+        item_start_step.setTextAlignment(Qt.AlignCenter)
+        self.table.setItem(0, 0, item_start_step)
+        self.table.setItem(0, 1, QTableWidgetItem("-"))
+        self.table.setItem(0, 2, QTableWidgetItem(DEPOT["nom"]))
+        self.table.setItem(0, 3, QTableWidgetItem("-"))
+        self.table.setItem(0, 4, QTableWidgetItem("-"))
+        
+        # Clients intermédiaires
+        for r_idx, order in enumerate(orders):
+            row = r_idx + 1
             values = [str(row + 1), order["id"], order["adresse"], str(order["volume"]), order["date_limite"]]
             for col, val in enumerate(values):
                 item = QTableWidgetItem(val)
                 if col == 0: item.setTextAlignment(Qt.AlignCenter)
                 self.table.setItem(row, col, item)
             self.table.item(row, 0).setData(Qt.UserRole, order)
+            
+        # Ligne d'arrivée (Retour Dépôt)
+        last_row = len(orders) + 1
+        item_end_step = QTableWidgetItem(str(last_row + 1))
+        item_end_step.setTextAlignment(Qt.AlignCenter)
+        self.table.setItem(last_row, 0, item_end_step)
+        self.table.setItem(last_row, 1, QTableWidgetItem("-"))
+        self.table.setItem(last_row, 2, QTableWidgetItem(DEPOT["nom"]))
+        self.table.setItem(last_row, 3, QTableWidgetItem("-"))
+        self.table.setItem(last_row, 4, QTableWidgetItem("-"))
 
         self.table.resizeRowsToContents()
         self.left_container.setCurrentIndex(1)
@@ -545,7 +581,6 @@ class ManagerApp(QMainWindow):
             self.routes_model[self.active_route_id]["driver"] = new_text
             if self.active_route_id in self.route_cards_references:
                 self.route_cards_references[self.active_route_id].update_driver_name_display(new_text)
-            self._update_unassigned_counters()
 
     def _on_departure_time_edited(self, new_time):
         if self.active_route_id and self.active_route_id in self.routes_model:
@@ -565,36 +600,28 @@ class ManagerApp(QMainWindow):
         selected = self.table.selectedItems()
         if not selected: return
         row = selected[0].row()
-        order = self.table.item(row, 0).data(Qt.UserRole)
+        item_step = self.table.item(row, 0)
+        if not item_step: return
         
+        order = item_step.data(Qt.UserRole)
         root_obj = self.quick_map.rootObject()
-        if root_obj and order:
-            root_obj.centerOnStop(order["lat"], order["lon"])
+        if root_obj:
+            if order:
+                root_obj.centerOnStop(order["lat"], order["lon"])
+            else:
+                #Si pas d'order_data associé, c'est que l'utilisateur a cliqué sur le dépôt initial ou final
+                root_obj.centerOnStop(DEPOT["lat"], DEPOT["lon"])
 
-    # ===========================================================================
-    # GESTION ONGLET 2 : COMMANDES FUTURES
-    # ===========================================================================
-    
     def _setup_future_tab(self):
         layout = QVBoxLayout(self.tab_future)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        title = QLabel("Base de données des commandes en attente (Non traitées par l'algorithme du Jour 1)")
+        title = QLabel("Registre Global des Commandes à Livrer (Moteur Angulaire)")
         title.setStyleSheet(f"font-weight: bold; color: {INK}; font-size: 14px; padding-bottom: 10px;")
         layout.addWidget(title)
 
-        # Identification des commandes déjà assignées aujourd'hui
-        assigned_order_ids = set()
-        for truck_orders in self.algo_output:
-            assigned_order_ids.update(truck_orders)
-
-        # Filtrage des commandes futures (celles qui ne sont pas dans les camions d'aujourd'hui)
-        future_orders = [
-            (c_id, data) for c_id, data in self.orders_db.items() if c_id not in assigned_order_ids
-        ]
-
-        columns = ["N° commande", "Adresse", "Vol.", "Date Limite"]
-        table_future = QTableWidget(len(future_orders), len(columns))
+        columns = ["ID Commande", "Adresse de livraison", "Volume Colis", "Échéance Planifiée"]
+        table_future = QTableWidget(len(self.orders_db), len(columns))
         table_future.setHorizontalHeaderLabels(columns)
         table_future.verticalHeader().setVisible(False)
         table_future.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -612,7 +639,8 @@ class ManagerApp(QMainWindow):
             QTableWidget::item:selected {{ background: {BLUE_PALE}; color: {INK}; }}
         """)
 
-        for row, (c_id, data) in enumerate(future_orders):
+        sorted_orders = sorted(self.orders_db.items(), key=lambda x: (x[1]['jour'], x[0]))
+        for row, (c_id, data) in enumerate(sorted_orders):
             values = [c_id, data["adresse"], str(data["volume"]), data["date_limite"]]
             for col, val in enumerate(values):
                 item = QTableWidgetItem(val)
