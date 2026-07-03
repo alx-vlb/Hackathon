@@ -6,7 +6,7 @@ Le but du sujet est d'optimiser un réseau de livraison de colis, les simulation
 
 -Installer les bibliothèques que nous avons utilisées avec : 
 
-```pip install requirement.txt```
+```pip install -r requirements.txt```
 
 Ensuite cela dépends de ce que vous voulez faire : 
 
