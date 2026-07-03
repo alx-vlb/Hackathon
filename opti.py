@@ -3,6 +3,7 @@ import math
 import numpy as np
 import requests
 
+#Si le code opti_cli entre dans une boucle infinie, augmenter ce paramètre
 epsilon = 0
 
 def matrice_distance(listcord): #Une liste de coordonnées des clients
@@ -40,9 +41,11 @@ def opti_cli(clients, mat): #Une liste d'identifiants du groupe de client à opt
     clients_opti = list(clients) 
     changement = True
     while changement:
+        #On ne quitte cette boucle que si aucune inversion avantageuse n'est trouvée
         changement = False
         for i in range(1, n - 2):
             for j in range(i + 1, n - 1):
+                #On regarde si l'inversion du segment entre i et j nous économise de la distance de trajet
                 cout_actuel = mat[clients_opti[i-1], clients_opti[i]] + mat[clients_opti[j], clients_opti[j+1]]
                 cout_futur = mat[clients_opti[i-1], clients_opti[j]] + mat[clients_opti[i], clients_opti[j+1]]
                 if cout_futur + epsilon < cout_actuel:

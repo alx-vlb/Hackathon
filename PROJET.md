@@ -25,3 +25,6 @@ La partie optimisation réfléchit au meilleur moyen de modéliser le problème,
 La partie affichage récupère la solution optimale et développe l'interface où on peut visualiser la course de chaque camion par jour, ainsi que l'odre de livraison dans chaque zone. 
 
 **Ce que nous aurions pu faire avec plus de temps**
+
+Nous aurions pu considérer l'ajout d'un paramètre "Heure de livraison des colis", ce qui aurait changé en profondeur la structure du code et qui aurait nécessité bien plus de temps avant de présenter une version satisfaisante.
+Un autre paramètre que nous aurions pu prendre en compte est la limitation de la distance maximale parcourue par un camion sur une journée, qui pourrait empêcher les camions de se charger au maximum s'ils n'arrivent pas à livrer les colis dans un temps donné. Cependant, la structure du code est déjà optimisée pour minimiser cette distance parcourue, et ce problème n'apparaît donc que si la capacité des camions est largement supérieure à la demande des clients.
