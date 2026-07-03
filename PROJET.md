@@ -24,4 +24,4 @@ La partie acquisition des données s'occupe de faire le lien entre les deux part
 La partie optimisation réfléchit au meilleur moyen de modéliser le problème, c'est à dire d'optimiser au mieux le temps de trajet, le coût en essence en maximisant le nombre de colis livrés par jour.
 La partie affichage récupère la solution optimale et développe l'interface où on peut visualiser la course de chaque camion par jour, ainsi que l'odre de livraison dans chaque zone. 
 
-**Ce que nous aurions pu faire avec plus de temps**
+
