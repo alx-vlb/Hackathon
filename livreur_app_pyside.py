@@ -272,7 +272,6 @@ class ManagerApp(QMainWindow):
         root.addWidget(body)
 
     def _load_all_data_from_backend(self): #le pont entre le moteur de calcul (angle_main.py) et l'interface : on lit ses variables globales et on les transforme en dictionnaires que l'UI sait afficher
-        print("\n--- IMPORTATION DE TOUTES LES TOURNÉES (MOTEUR ANGLE_MAIN) ---")
         for cid, client in main.Clients.items():
             if isinstance(cid, tuple) or cid == 0:
                 continue #le dico Clients contient chaque client deux fois (une fois par id entier, une fois par coordonnées) + le dépôt : on ne garde que les entrées par id entier

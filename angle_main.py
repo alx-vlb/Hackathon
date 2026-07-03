@@ -53,4 +53,3 @@ for jour in range(nb_jours):
         for client_id in no_delivered:
             demande[jour + 1][client_id] += demande[jour][client_id]
 
-print(course)
